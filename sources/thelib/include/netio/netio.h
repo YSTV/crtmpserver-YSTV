@@ -1,4 +1,4 @@
-/* 
+/*
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -21,6 +21,9 @@
 #ifndef _NETIO_H
 #define	_NETIO_H
 
+#include "netio/iohandlertype.h"
+#include "netio/fdstats.h"
+
 #ifdef NET_KQUEUE
 #include "netio/kqueue/iohandler.h"
 #include "netio/kqueue/iohandlermanager.h"
@@ -34,9 +37,9 @@
 #include "netio/kqueue/stdiocarrier.h"
 #ifdef HAS_KQUEUE_TIMERS
 #define NETWORK_REACTOR "kqueue with EVFILT_TIMER support"
-#else
+#else /* HAS_KQUEUE_TIMERS */
 #define NETWORK_REACTOR "kqueue without EVFILT_TIMER support"
-#endif
+#endif /* HAS_KQUEUE_TIMERS */
 #endif
 
 #ifdef NET_EPOLL
@@ -50,7 +53,11 @@
 #include "netio/epoll/tcpconnector.h"
 #include "netio/epoll/inboundnamedpipecarrier.h"
 #include "netio/epoll/stdiocarrier.h"
-#define NETWORK_REACTOR "epoll"
+#ifdef HAS_EPOLL_TIMERS
+#define NETWORK_REACTOR "epoll with timerfd_XXXX support"
+#else /* HAS_EPOLL_TIMERS */
+#define NETWORK_REACTOR "epoll without timerfd_XXXX support"
+#endif /* HAS_EPOLL_TIMERS */
 #endif
 
 #ifdef NET_SELECT
@@ -75,20 +82,11 @@
 #include "netio/iocp/tcpcarrier.h"
 #include "netio/iocp/udpcarrier.h"
 #include "netio/iocp/tcpconnector.h"
-#define NETWORK_REACTOR "iocp"
-#endif
-
-#ifdef NET_IOCP2
-#include "netio/iocp2/iohandler.h"
-#include "netio/iocp2/iohandlermanager.h"
-#include "netio/iocp2/iohandlermanagertoken.h"
-#include "netio/iocp2/iotimer.h"
-#include "netio/iocp2/tcpacceptor.h"
-#include "netio/iocp2/tcpcarrier.h"
-#include "netio/iocp2/udpcarrier.h"
-#include "netio/iocp2/tcpconnector.h"
-#include "netio/iocp2/stdiocarrier.h"
-#define NETWORK_REACTOR "iocp2"
+#ifdef HAS_EPOLL_TIMERS
+#define NETWORK_REACTOR "iocp with native timers"
+#else /* HAS_EPOLL_TIMERS */
+#define NETWORK_REACTOR "iocp without native timers"
+#endif /* HAS_EPOLL_TIMERS */
 #endif
 
 #endif	/* _NETIO_H */

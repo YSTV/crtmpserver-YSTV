@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -52,27 +52,11 @@ Variant StreamMessageFactory::GetUserControlStreamIsRecorded(uint32_t streamId) 
 	return GetUserControlStream(RM_USRCTRL_TYPE_STREAM_IS_RECORDED, streamId);
 }
 
-Variant StreamMessageFactory::GetUserControlStreamSetBufferlength(
-		uint32_t streamId, uint32_t value) {
-	Variant result = GetUserControlStream(RM_USRCTRL_TYPE_STREAM_SET_BUFFER_LENGTH,
-			streamId);
-	M_USRCTRL_BUFFERLEN(result) = (uint32_t) value;
-	return result;
-}
-
 Variant StreamMessageFactory::GetInvokeCreateStream() {
 	Variant createStream;
 	createStream[(uint32_t) 0] = Variant();
 	return GenericMessageFactory::GetInvoke(3, 0, 0, false, 1,
 			RM_INVOKE_FUNCTION_CREATESTREAM, createStream);
-}
-
-Variant StreamMessageFactory::GetInvokeReleaseStream(string streamName) {
-	Variant releaseStream;
-	releaseStream[(uint32_t) 0] = Variant();
-	releaseStream[(uint32_t) 1] = streamName;
-	return GenericMessageFactory::GetInvoke(3, 0, 0, false, 1,
-			RM_INVOKE_FUNCTION_RELEASESTREAM, releaseStream);
 }
 
 Variant StreamMessageFactory::GetInvokeCloseStream(uint32_t channelId, uint32_t streamId) {
@@ -116,14 +100,6 @@ Variant StreamMessageFactory::GetInvokeFCSubscribe(string streamName) {
 	FCSubscribe.PushToArray(streamName);
 	return GenericMessageFactory::GetInvoke(3, 0, 0, false, 1,
 			RM_INVOKE_FUNCTION_FCSUBSCRIBE, FCSubscribe);
-}
-
-Variant StreamMessageFactory::GetInvokeFCPublish(string streamName) {
-	Variant FCPublish;
-	FCPublish.PushToArray(Variant());
-	FCPublish.PushToArray(streamName);
-	return GenericMessageFactory::GetInvoke(3, 0, 0, false, 1,
-			RM_INVOKE_FUNCTION_FCPUBLISH, FCPublish);
 }
 
 Variant StreamMessageFactory::GetInvokeCreateStreamResult(Variant &request,
@@ -173,19 +149,6 @@ Variant StreamMessageFactory::GetInvokeOnFCPublish(uint32_t channelId,
 
 	return GenericMessageFactory::GetInvoke(channelId, streamId,
 			timeStamp, isAbsolute, requestId, "onFCPublish", params);
-}
-
-Variant StreamMessageFactory::GetInvokeOnFCSubscribe(uint32_t channelId,
-		uint32_t streamId, double timeStamp, bool isAbsolute,
-		double requestId, string code, string description) {
-	Variant params;
-
-	params[(uint32_t) 0] = Variant();
-	params[(uint32_t) 1][RM_INVOKE_PARAMS_ONSTATUS_CODE] = code;
-	params[(uint32_t) 1][RM_INVOKE_PARAMS_ONSTATUS_DESCRIPTION] = description;
-
-	return GenericMessageFactory::GetInvoke(channelId, streamId,
-			timeStamp, isAbsolute, requestId, "onFCSubscribe", params);
 }
 
 Variant StreamMessageFactory::GetInvokeOnStatusStreamPublishBadName(Variant &request,
@@ -382,19 +345,12 @@ Variant StreamMessageFactory::GetNotifyRtmpSampleAccess(uint32_t channelId,
 
 Variant StreamMessageFactory::GetNotifyOnMetaData(uint32_t channelId,
 		uint32_t streamId, double timeStamp, bool isAbsolute,
-		Variant metadata, bool dataKeyFrame) {
+		Variant metadata) {
 	Variant parameters;
-	metadata[HTTP_HEADERS_SERVER] = BRANDING_BANNER;
-	if (dataKeyFrame) {
-		parameters[(uint32_t) 0] = "onMetaData";
-		parameters[(uint32_t) 1] = metadata;
-		return GenericMessageFactory::GetNotify(channelId, streamId, timeStamp,
-				isAbsolute, "@setDataFrame", parameters);
-	} else {
-		parameters[(uint32_t) 0] = metadata;
-		return GenericMessageFactory::GetNotify(channelId, streamId, timeStamp,
-				isAbsolute, "onMetaData", parameters);
-	}
+	metadata[HTTP_HEADERS_SERVER] = HTTP_HEADERS_SERVER_US;
+	parameters[(uint32_t) 0] = metadata;
+	return GenericMessageFactory::GetNotify(channelId, streamId, timeStamp,
+			isAbsolute, "onMetaData", parameters);
 }
 
 Variant StreamMessageFactory::GetNotifyOnPlayStatusPlayComplete(uint32_t channelId,

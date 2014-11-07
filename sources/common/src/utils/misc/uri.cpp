@@ -85,6 +85,7 @@ bool parseURI(string stringUri, URI &uri) {
 		_schemeToPort["rtsp"] = 554;
 		_schemeToPort["rtmp"] = 1935;
 		_schemeToPort["rtmpe"] = 1935;
+		_schemeToPort["mms"] = 1755;
 	}
 	if (MAP_HAS1(_schemeToPort, scheme)) {
 		port = _schemeToPort[scheme];
@@ -103,9 +104,8 @@ bool parseURI(string stringUri, URI &uri) {
 	if (pos != string::npos) {
 		if (limit != string::npos) {
 			hasAuthentication = pos<limit;
-		} else {
-			hasAuthentication = true;
 		}
+		hasAuthentication = true;
 	}
 	if (hasAuthentication) {
 		authentication = stringUri.substr(cursor, pos - cursor);
@@ -227,7 +227,7 @@ bool parseURI(string stringUri, URI &uri) {
 			documentPath = fullDocumentPath.substr(0, pos + 1);
 			document = fullDocumentPath.substr(pos + 1);
 		} else {
-			for (string::size_type i = fullDocumentPath.size() - 1; i != 0; i--) {
+			for (string::size_type i = fullDocumentPath.size() - 1; i >= 0; i--) {
 				if (fullDocumentPath[i] == '/')
 					break;
 				document = fullDocumentPath[i] + document;
@@ -274,31 +274,6 @@ bool parseURI(string stringUri, URI &uri) {
 	uri.parameters(parameters);
 
 	return true;
-}
-
-string URI::baseURI() {
-	if ((scheme() == "")
-			|| (host() == "")
-			|| (documentPath() == ""))
-		return "";
-	string result = "";
-	result = scheme() + "://";
-	if ((userName() != "") && (password() != "")) {
-		result += userName() + ":" + password() + "@";
-	}
-	result += host();
-	if (portSpecified())
-		result += format(":%"PRIu16, port());
-	result += documentPath();
-	return result;
-}
-
-string URI::derivedURI(string relativePath, bool includeParams) {
-	string result = baseURI() + relativePath;
-	if ((fullParameters() != "") && (includeParams)) {
-		result += fullParameters();
-	}
-	return result;
 }
 
 bool URI::FromVariant(Variant & variant, URI &uri) {

@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -29,13 +29,6 @@ class BaseProtocol;
 class BaseAppProtocolHandler;
 class BaseStream;
 class IOHandler;
-class StreamMetadataResolver;
-
-enum OperationType {
-	OPERATION_TYPE_STANDARD = 0,
-	OPERATION_TYPE_PULL,
-	OPERATION_TYPE_PUSH
-};
 
 /*!
 	@brief
@@ -49,10 +42,6 @@ private:
 	map<uint64_t, BaseAppProtocolHandler *> _protocolsHandlers;
 	StreamsManager _streamsManager;
 	bool _allowDuplicateInboundNetworkStreams;
-	map<string, string> _streamAliases;
-	bool _hasStreamAliases;
-	StreamMetadataResolver *_pStreamMetadataResolver;
-	Variant _dummy;
 protected:
 	Variant _configuration;
 	bool _isDefault;
@@ -86,7 +75,6 @@ public:
 	 */
 	bool IsDefault();
 	StreamsManager *GetStreamsManager();
-	StreamMetadataResolver *GetStreamMetadataResolver();
 
 	virtual bool Initialize();
 
@@ -122,8 +110,6 @@ public:
 
 	template<class T>
 	T *GetProtocolHandler(BaseProtocol *pProtocol) {
-		if (pProtocol == NULL)
-			return NULL;
 		return (T *) GetProtocolHandler(pProtocol);
 	}
 	BaseAppProtocolHandler *GetProtocolHandler(BaseProtocol *pProtocol);
@@ -154,39 +140,27 @@ public:
 	virtual void UnRegisterProtocol(BaseProtocol *pProtocol);
 
 	/*!
-		@brief Displays the registered stream's ID, type, and name in the logs
+		@brief Displays the registered stream's ID, type, and name in the logs 
 		@param pStream
 	 */
 	virtual void SignalStreamRegistered(BaseStream *pStream);
 
 	/*!
-		@brief Displays the unregistered stream's ID, type, and name in the logs
+		@brief Displays the unregistered stream's ID, type, and name in the logs 
 		@param pStream
 	 */
 	virtual void SignalStreamUnRegistered(BaseStream *pStream);
 
 	virtual bool PullExternalStreams();
-	virtual bool PullExternalStream(Variant &streamConfig);
-	virtual bool PushLocalStream(Variant &streamConfig);
+	virtual bool PullExternalStream(Variant streamConfig);
+	virtual bool PushLocalStream(Variant streamConfig);
 	bool ParseAuthentication();
-
-	virtual void SignalUnLinkingStreams(BaseInStream *pInStream, BaseOutStream *pOutStream);
 
 	/*!
 		@brief Deletes all active protocols and IOHandlers bound to the application.
 		@param pApplication
 	 */
 	static void Shutdown(BaseClientApplication *pApplication);
-
-	string GetStreamNameByAlias(string &streamName, bool remove = true);
-	void SetStreamAlias(string &streamName, string &streamAlias);
-	void RemoveStreamAlias(string &streamAlias);
-	map<string, string> & GetAllStreamAliases();
-
-	OperationType GetOperationType(BaseProtocol *pProtocol, Variant &streamConfig);
-	OperationType GetOperationType(Variant &allParameters, Variant &streamConfig);
-	void StoreConnectionType(Variant &dest, BaseProtocol *pProtocol);
-	Variant &GetStreamSettings(Variant &src);
 private:
 	string GetServiceInfo(IOHandler *pIOHander);
 };

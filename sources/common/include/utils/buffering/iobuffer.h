@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -28,14 +28,6 @@
 
 #define GETAVAILABLEBYTESCOUNT(x)     ((x)._published - (x)._consumed)
 #define GETIBPOINTER(x)     ((uint8_t *)((x)._pBuffer + (x)._consumed))
-#define SETIBSENDLIMIT(x,y) \
-{ \
-	if(((x)._sendLimit!=0)&&((x)._sendLimit!=0xffffffff)){ \
-		ASSERT("Setting a IOBufer send limit over an existing limit"); \
-	} \
-	(x)._sendLimit=(y); \
-}
-#define GETIBSENDLIMIT(x) ((x)._sendLimit)
 
 /*!
 	@class IOBuffer
@@ -92,6 +84,13 @@ public:
 		@param recvAmount - Size of data received
 	 */
 	bool ReadFromStdio(int32_t fd, uint32_t expected, int32_t &recvAmount);
+
+	/*!
+		@brief Read from File Stream and saves it.
+		@param fs - Descriptor that contains the data
+		@param size - Size of the receiving buffer
+	 */
+	bool ReadFromFs(fstream &fs, uint32_t size);
 
 	/*!
 		@brief Read from File Stream and saves it
@@ -161,7 +160,7 @@ public:
 		@param fd
 		@param size
 	 */
-	bool WriteToStdio(int32_t fd, uint32_t size, int32_t &sentAmount);
+	bool WriteToStdio(int32_t fd, uint32_t size);
 
 	//Utility functions
 
@@ -214,8 +213,7 @@ public:
 		@brief
 	 */
 
-	static string DumpBuffer(const uint8_t *pBuffer, uint32_t length);
-	static string DumpBuffer(MSGHDR &message, uint32_t limit = 0);
+	static string DumpBuffer(uint8_t *pBuffer, uint32_t length);
 	string ToString(uint32_t startIndex = 0, uint32_t limit = 0);
 	operator string();
 

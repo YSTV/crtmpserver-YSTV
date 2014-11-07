@@ -21,11 +21,10 @@
 #include "streaming/baseinstream.h"
 #include "streaming/baseoutstream.h"
 #include "streaming/streamstypes.h"
-#include "streaming/streamsmanager.h"
-#include "streaming/codectypes.h"
 
-BaseInStream::BaseInStream(BaseProtocol *pProtocol, uint64_t type, string name)
-: BaseStream(pProtocol, type, name) {
+BaseInStream::BaseInStream(BaseProtocol *pProtocol,
+		StreamsManager *pStreamsManager, uint64_t type, string name)
+: BaseStream(pProtocol, pStreamsManager, type, name) {
 	if (!TAG_KIND_OF(type, ST_IN)) {
 		ASSERT("Incorrect stream type. Wanted a stream type in class %s and got %s",
 				STR(tagToString(ST_IN)), STR(tagToString(type)));
@@ -62,7 +61,7 @@ void BaseInStream::GetStats(Variant &info, uint32_t namespaceId) {
 	}
 	StreamCapabilities *pCapabilities = GetCapabilities();
 	if (pCapabilities != NULL)
-		info["bandwidth"] = (uint32_t) (pCapabilities->GetTransferRate() / 1024.0);
+		info["bandwidth"] = (uint32_t) pCapabilities->bandwidthHint;
 	else
 		info["bandwidth"] = (uint32_t) 0;
 }
@@ -98,7 +97,6 @@ bool BaseInStream::UnLink(BaseOutStream *pOutStream, bool reverseUnLink) {
 		WARN("BaseInStream::UnLink: This stream is not linked");
 		return true;
 	}
-	_pStreamsManager->SignalUnLinkingStreams(this, pOutStream);
 
 	_linkedStreams.erase(pOutStream->GetUniqueId());
 	LinkedListNode<BaseOutStream *> *pTemp = _pOutStreams;
@@ -123,14 +121,14 @@ bool BaseInStream::UnLink(BaseOutStream *pOutStream, bool reverseUnLink) {
 	return true;
 }
 
-bool BaseInStream::Play(double dts, double length) {
-	if (!SignalPlay(dts, length)) {
+bool BaseInStream::Play(double absoluteTimestamp, double length) {
+	if (!SignalPlay(absoluteTimestamp, length)) {
 		FATAL("Unable to signal play");
 		return false;
 	}
 	LinkedListNode<BaseOutStream *> *pTemp = _pOutStreams;
 	while (pTemp != NULL) {
-		if (!pTemp->info->SignalPlay(dts, length)) {
+		if (!pTemp->info->SignalPlay(absoluteTimestamp, length)) {
 			WARN("Unable to signal play on an outbound stream");
 		}
 		pTemp = pTemp->pPrev;
@@ -168,16 +166,16 @@ bool BaseInStream::Resume() {
 	return true;
 }
 
-bool BaseInStream::Seek(double dts) {
+bool BaseInStream::Seek(double absoluteTimestamp) {
 	LinkedListNode<BaseOutStream *> *pTemp = _pOutStreams;
 	while (pTemp != NULL) {
-		if (!pTemp->info->SignalSeek(dts)) {
+		if (!pTemp->info->SignalSeek(absoluteTimestamp)) {
 			WARN("Unable to signal seek on an outbound stream");
 		}
 		pTemp = pTemp->pPrev;
 	}
 
-	if (!SignalSeek(dts)) {
+	if (!SignalSeek(absoluteTimestamp)) {
 		FATAL("Unable to signal seek");
 		return false;
 	}
@@ -200,50 +198,3 @@ bool BaseInStream::Stop() {
 	return true;
 }
 
-void BaseInStream::AudioStreamCapabilitiesChanged(
-		StreamCapabilities *pCapabilities, AudioCodecInfo *pOld,
-		AudioCodecInfo *pNew) {
-	LinkedListNode<BaseOutStream *> *pTemp = _pOutStreams;
-	while (pTemp != NULL) {
-		pTemp->info->SignalAudioStreamCapabilitiesChanged(pCapabilities, pOld,
-				pNew);
-		if (IsEnqueueForDelete())
-			return;
-		pTemp = pTemp->pPrev;
-	}
-}
-
-void BaseInStream::VideoStreamCapabilitiesChanged(
-		StreamCapabilities *pCapabilities, VideoCodecInfo *pOld,
-		VideoCodecInfo *pNew) {
-	LinkedListNode<BaseOutStream *> *pTemp = _pOutStreams;
-	while (pTemp != NULL) {
-		pTemp->info->SignalVideoStreamCapabilitiesChanged(pCapabilities, pOld,
-				pNew);
-		if (IsEnqueueForDelete())
-			return;
-		pTemp = pTemp->pPrev;
-	}
-}
-
-StreamCapabilities * BaseInStream::GetCapabilities() {
-	return NULL;
-}
-
-uint32_t BaseInStream::GetInputVideoTimescale() {
-	StreamCapabilities *pCapabilities = NULL;
-	VideoCodecInfo *pCodecInfo = NULL;
-	if (((pCapabilities = GetCapabilities()) == NULL)
-			|| ((pCodecInfo = pCapabilities->GetVideoCodec()) == NULL))
-		return 1;
-	return pCodecInfo->_samplingRate;
-}
-
-uint32_t BaseInStream::GetInputAudioTimescale() {
-	StreamCapabilities *pCapabilities = NULL;
-	AudioCodecInfo *pCodecInfo = NULL;
-	if (((pCapabilities = GetCapabilities()) == NULL)
-			|| ((pCodecInfo = pCapabilities->GetAudioCodec()) == NULL))
-		return 1;
-	return pCodecInfo->_samplingRate;
-}

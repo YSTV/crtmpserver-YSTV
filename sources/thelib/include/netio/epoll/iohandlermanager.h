@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -23,7 +23,6 @@
 
 #include "common.h"
 #include "netio/epoll/iohandlermanagertoken.h"
-#include "netio/fdstats.h"
 
 class IOHandler;
 
@@ -39,16 +38,11 @@ private:
 	static vector<IOHandlerManagerToken *> _tokensVector2;
 	static vector<IOHandlerManagerToken *> *_pAvailableTokens;
 	static vector<IOHandlerManagerToken *> *_pRecycledTokens;
-	static int32_t _nextWaitPeriod;
-#ifndef HAS_EPOLL_TIMERS
 	static TimersManager *_pTimersManager;
-#endif /* HAS_EPOLL_TIMERS */
 	static struct epoll_event _dummy;
-	static FdStats _fdStats;
 public:
 	static map<uint32_t, IOHandler *> & GetActiveHandlers();
 	static map<uint32_t, IOHandler *> & GetDeadHandlers();
-	static FdStats &GetStats(bool updateSpeeds);
 	static void Initialize();
 	static void Start();
 	static void SignalShutdown();
@@ -56,14 +50,6 @@ public:
 	static void Shutdown();
 	static void RegisterIOHandler(IOHandler *pIOHandler);
 	static void UnRegisterIOHandler(IOHandler *pIOHandler);
-	static int CreateRawUDPSocket();
-	static void CloseRawUDPSocket(int socket);
-#ifdef GLOBALLY_ACCOUNT_BYTES
-	static void AddInBytesManaged(IOHandlerType type, uint64_t bytes);
-	static void AddOutBytesManaged(IOHandlerType type, uint64_t bytes);
-	static void AddInBytesRawUdp(uint64_t bytes);
-	static void AddOutBytesRawUdp(uint64_t bytes);
-#endif /* GLOBALLY_ACCOUNT_BYTES */
 	static bool EnableReadData(IOHandler *pIOHandler);
 	static bool DisableReadData(IOHandler *pIOHandler, bool ignoreError = false);
 	static bool EnableWriteData(IOHandler *pIOHandler);
@@ -71,7 +57,6 @@ public:
 	static bool EnableAcceptConnections(IOHandler *pIOHandler);
 	static bool DisableAcceptConnections(IOHandler *pIOHandler, bool ignoreError = false);
 	static bool EnableTimer(IOHandler *pIOHandler, uint32_t seconds);
-	static bool EnableHighGranularityTimer(IOHandler *pIOHandler, uint32_t milliseconds);
 	static bool DisableTimer(IOHandler *pIOHandler, bool ignoreError = false);
 	static void EnqueueForDelete(IOHandler *pIOHandler);
 	static uint32_t DeleteDeadHandlers();
@@ -79,9 +64,7 @@ public:
 private:
 	static void SetupToken(IOHandler *pIOHandler);
 	static void FreeToken(IOHandler *pIOHandler);
-#ifndef HAS_EPOLL_TIMERS
-	static bool ProcessTimer(TimerEvent &event);
-#endif /* HAS_EPOLL_TIMERS */
+	static void ProcessTimer(TimerEvent &event);
 };
 
 

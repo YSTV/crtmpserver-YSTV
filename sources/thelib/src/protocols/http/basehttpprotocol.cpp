@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -28,9 +28,6 @@
 #define HTTP_MAX_HEADERS_COUNT 64
 #define HTTP_MAX_HEADERS_SIZE 2048
 #define HTTP_MAX_CHUNK_SIZE 1024*128
-
-#define DEBUG_HTTP(...)
-//#define DEBUG_HTTP(...) FINEST(__VA_ARGS__)
 
 BaseHTTPProtocol::BaseHTTPProtocol(uint64_t protocolType)
 : BaseProtocol(protocolType) {
@@ -143,56 +140,44 @@ bool BaseHTTPProtocol::SignalInputData(int32_t recvAmount) {
 }
 
 bool BaseHTTPProtocol::SignalInputData(IOBuffer &buffer) {
-	DEBUG_HTTP("-------------------");
-	DEBUG_HTTP("%s", STR(*this));
-	DEBUG_HTTP("_state: %s", (_state == HTTP_STATE_HEADERS) ? "HTTP_STATE_HEADERS" : (_state == HTTP_STATE_PAYLOAD) ? "HTTP_STATE_PAYLOAD" : "UNKNOWN");
 	//1. Get the first line and the headers if necessary
 	if (_state == HTTP_STATE_HEADERS) {
-		DEBUG_HTTP("Parse the headers");
 		if (!ParseHeaders(buffer)) {
-			FATAL("Unable to read response headers: %s", STR(*this));
+			FATAL("Unable to read response headers");
 			return false;
 		}
 	}
 
-	DEBUG_HTTP("_continueAfterParseHeaders: %d", _continueAfterParseHeaders);
 	if (!_continueAfterParseHeaders)
 		return true;
 
 	//2. Are we still in the "get headers state"? If so, wait for more data
-	DEBUG_HTTP("new value of _state: %s", (_state == HTTP_STATE_HEADERS) ? "HTTP_STATE_HEADERS" : (_state == HTTP_STATE_PAYLOAD) ? "HTTP_STATE_PAYLOAD" : "UNKNOWN");
 	if (_state != HTTP_STATE_PAYLOAD) {
 		return true;
 	}
 
-	DEBUG_HTTP("_chunkedContent: %d", _chunkedContent);
 	//3. Turning point in processing
 	if (_chunkedContent) {
 		//4. We deal with chunked content
-		DEBUG_HTTP("begin chunk content handling");
 		if (!HandleChunkedContent(buffer)) {
-			FATAL("Unable to handle chunked content: %s", STR(*this));
+			FATAL("Unable to handle chunked content");
 			return false;
 		}
 	} else {
 		//5. We deal with length-specified type of content
-		DEBUG_HTTP("begin fixed length content handling");
 		if (!HandleFixedLengthContent(buffer)) {
-			FATAL("Unable to handle fixed length content: %s", STR(*this));
+			FATAL("Unable to handle fixed length content");
 			return false;
 		}
 	}
 
 	//6. Are we in the get headers state? if so, we might have a new request
 	//on the pipe.
-	DEBUG_HTTP("brand new value of _state: %s", (_state == HTTP_STATE_HEADERS) ? "HTTP_STATE_HEADERS" : (_state == HTTP_STATE_PAYLOAD) ? "HTTP_STATE_PAYLOAD" : "UNKNOWN");
 	if (_state == HTTP_STATE_HEADERS) {
-		DEBUG_HTTP("Call SignalInputData again");
 		//7. So, get to work again...
 		return SignalInputData(buffer);
 	} else {
 		//8 We are done :)
-		DEBUG_HTTP("Done");
 		return true;
 	}
 }
@@ -227,7 +212,7 @@ bool BaseHTTPProtocol::TransferCompleted() {
 	if (_chunkedContent) {
 		return _lastChunk;
 	} else {
-		o_assert(_sessionDecodedBytesCount <= _contentLength);
+		assert(_sessionDecodedBytesCount <= _contentLength);
 		return _sessionDecodedBytesCount == _contentLength;
 	}
 }
@@ -366,19 +351,18 @@ bool BaseHTTPProtocol::HandleChunkedContent(IOBuffer &buffer) {
 	//2. We cycle until we don't have any complete chunks anymore
 	//or we hit the 0 bytes chunks (end of chunked content)
 	uint8_t *pBuffer = NULL;
+	string chunkSizeString = "";
 	uint32_t chunkSize = 0;
-	uint32_t chunkSizeSize = 0;
-	while (GETAVAILABLEBYTESCOUNT(buffer) >= 3) {
+	while (true) {
 		//1. Get the raw pointer. We need it almost everywhere
 		pBuffer = GETIBPOINTER(buffer);
-		//FINEST("%s", STR(buffer));
 
-		chunkSizeSize = 0;
 		//3. Read the string which represents the number of bytes in the chunk
+		chunkSizeString = "0x";
 		for (uint32_t i = 0; i < GETAVAILABLEBYTESCOUNT(buffer) - 1; i++) {
 			//5. Are we at the end of chunk size string?
-			if ((pBuffer[i] == 0x0d) && (pBuffer[i + 1] == 0x0a)) {
-				chunkSizeSize = i + 2;
+			if (pBuffer[i] == 0x0d
+					&& pBuffer[i + 1] == 0x0a) {
 				break;
 			}
 
@@ -388,26 +372,30 @@ bool BaseHTTPProtocol::HandleChunkedContent(IOBuffer &buffer) {
 			if (i >= 10 || (!(((pBuffer[i] >= '0') && (pBuffer[i] <= '9'))
 					|| ((pBuffer[i] >= 'a') && (pBuffer[i] <= 'f'))
 					|| ((pBuffer[i] >= 'A') && (pBuffer[i] <= 'F'))))) {
-				FATAL("Unable to read chunk size length:\n%s", STR(buffer));
+				FATAL("Unable to read chunk size length");
 				return false;
 			}
+
+			//6. Save the current character
+			chunkSizeString += (char) pBuffer[i];
 		}
 		//7. Test the newly extracted chunk size
-		if (chunkSizeSize == 0) {
-			return true;
+		if (chunkSizeString == "0x") {
+			FATAL("Unable to read chunk size");
+			return false;
 		}
 
 		//8. Get its actual value and test it as well
-		chunkSize = strtol((char *) pBuffer, NULL, 16);
+		chunkSize = strtol(STR(chunkSizeString), NULL, 16);
 		if (chunkSize > HTTP_MAX_CHUNK_SIZE) {
-			FATAL("Chunk size too large. Maximum allowed is %"PRIu32" and we got %"PRIu32,
+			FATAL("Chunk size too large. Maximum allowed is %u and we got %u",
 					(uint32_t) HTTP_MAX_CHUNK_SIZE, chunkSize);
 			return false;
 		}
 
 		//9. Now, we know the chunk size... do we have enough data?
 		if (GETAVAILABLEBYTESCOUNT(buffer) <
-				chunkSizeSize //length of the chunk size string
+				chunkSizeString.size() //length of the chunk size string
 				- 2 //substract the 0x particle
 				+ 2 //the \r\n that follows the chunk size string
 				+ chunkSize //chunk size itself
@@ -423,7 +411,7 @@ bool BaseHTTPProtocol::HandleChunkedContent(IOBuffer &buffer) {
 		if (chunkSize != 0) {
 			//11. Make the copy
 			_contentLength += chunkSize;
-			_inputBuffer.ReadFromBuffer(GETIBPOINTER(buffer) + chunkSizeSize - 2 + 2, chunkSize);
+			_inputBuffer.ReadFromBuffer(GETIBPOINTER(buffer) + chunkSizeString.size() - 2 + 2, chunkSize);
 		} else {
 			//12. This was the last chunk (0 bytes size)
 			_lastChunk = true;
@@ -436,12 +424,7 @@ bool BaseHTTPProtocol::HandleChunkedContent(IOBuffer &buffer) {
 		}
 
 		//13. Ignore the bytes from the input buffer
-		DEBUG_HTTP("available bytes before ignore: %"PRIu32, GETAVAILABLEBYTESCOUNT(buffer));
-		//				if (GETAVAILABLEBYTESCOUNT(buffer) == ((uint32_t) chunkSizeSize - 2 + 2 + chunkSize + 2)) {
-		//					DEBUG_HTTP("%s", STR(buffer));
-		//				}
-		buffer.Ignore((uint32_t) chunkSizeSize - 2 + 2 + chunkSize + 2);
-		DEBUG_HTTP("available bytes  after ignore: %"PRIu32, GETAVAILABLEBYTESCOUNT(buffer));
+		buffer.Ignore(chunkSizeString.size() - 2 + 2 + chunkSize + 2);
 
 		//14. reset the state if necessary
 		if (TransferCompleted()) {
@@ -454,14 +437,13 @@ bool BaseHTTPProtocol::HandleChunkedContent(IOBuffer &buffer) {
 			return true;
 		}
 	}
-	return true;
 }
 
 bool BaseHTTPProtocol::HandleFixedLengthContent(IOBuffer &buffer) {
 	//1. Compute the chunk size that we areg going to read
 	//which is how many bytes we have available, but no more than _contentLength
 	uint32_t chunkSize = GETAVAILABLEBYTESCOUNT(buffer);
-	o_assert(_sessionDecodedBytesCount <= _contentLength);
+	assert(_sessionDecodedBytesCount <= _contentLength);
 	uint32_t remaining = _contentLength - _sessionDecodedBytesCount;
 	chunkSize = chunkSize > remaining ? remaining : chunkSize;
 

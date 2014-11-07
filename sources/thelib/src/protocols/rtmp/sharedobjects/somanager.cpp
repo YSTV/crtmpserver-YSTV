@@ -1,18 +1,18 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
- *
+ *  
  *  This file is part of crtmpserver.
  *  crtmpserver is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
  *  (at your option) any later version.
- *
+ *  
  *  crtmpserver is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
- *
+ *  
  *  You should have received a copy of the GNU General Public License
  *  along with crtmpserver.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -77,36 +77,30 @@ bool SOManager::ProcessFlexSharedObject(BaseRTMPProtocol *pFrom, Variant &reques
 bool SOManager::ProcessSharedObject(BaseRTMPProtocol *pFrom, Variant &request) {
 	//1. Get the name and the persistance property
 	string name = M_SO_NAME(request);
-	if (pFrom->GetType() == PT_OUTBOUND_RTMP)
-		pFrom->SignalBeginSOProcess(name);
 
-	SO *pSO = NULL;
-	if (MAP_HAS1(_sos, name))
-		pSO = _sos[name];
+	//2. Get or create the SO
+	SO *pSO = GetSO(name, M_SO_PERSISTANCE(request));
 
 	//3. Hit the SO with the operations requested
 	for (uint32_t i = 0; i < M_SO_PRIMITIVES(request).MapSize(); i++) {
 		if (!ProcessSharedObjectPrimitive(pFrom, pSO, name, request, i)) {
 			FATAL("Unable to process primitive %u from\n%s", i,
 					STR(request.ToString()));
-			if (pFrom->GetType() == PT_OUTBOUND_RTMP)
-				pFrom->SignalEndSOProcess(name, M_SO_VER(request));
 			return false;
 		}
 	}
 
 	//4. Get the SO again, but ONLY is it is stil alive
-	pSO = NULL;
 	if (MAP_HAS1(_sos, name))
 		pSO = _sos[name];
+	else
+		pSO = NULL;
 
 	//5. Track it if is alive
 	if (pSO != NULL)
 		pSO->Track();
 
 	//6. Done
-	if (pFrom->GetType() == PT_OUTBOUND_RTMP)
-		pFrom->SignalEndSOProcess(name, M_SO_VER(request));
 	return true;
 }
 
@@ -117,7 +111,6 @@ bool SOManager::ProcessSharedObjectPrimitive(BaseRTMPProtocol *pFrom, SO *pSO,
 	switch ((uint8_t) primitive[RM_SHAREDOBJECTPRIMITIVE_TYPE]) {
 		case SOT_CS_CONNECT:
 		{
-			pSO = GetSO(name, M_SO_PERSISTANCE(request));
 			pSO->RegisterProtocol(pFrom->GetId());
 			ADD_VECTOR_END(_protocolSos[pFrom->GetId()], pSO);
 			return true;
@@ -127,7 +120,11 @@ bool SOManager::ProcessSharedObjectPrimitive(BaseRTMPProtocol *pFrom, SO *pSO,
 			UnRegisterProtocol(pFrom);
 			return true;
 		}
-		case SOT_CS_DELETE_FIELD_REQUEST:
+		case SOT_CSC_DELETE_DATA:
+		{
+			NYIR;
+		}
+		case SOT_CS_SET_ATTRIBUTE:
 		{
 			if (pSO == NULL) {
 				FATAL("SO is null");
@@ -135,43 +132,10 @@ bool SOManager::ProcessSharedObjectPrimitive(BaseRTMPProtocol *pFrom, SO *pSO,
 			}
 
 			FOR_MAP(primitive[RM_SHAREDOBJECTPRIMITIVE_PAYLOAD], string, Variant, i) {
-				pSO->UnSet(MAP_VAL(i), M_SO_VER(request));
-			}
-			return true;
-		}
-		case SOT_CS_UPDATE_FIELD_REQUEST:
-		{
-			if (pSO == NULL) {
-				FATAL("SO is null");
-				return false;
-			}
-
-			FOR_MAP(primitive[RM_SHAREDOBJECTPRIMITIVE_PAYLOAD], string, Variant, i) {
-				pSO->Set((string &) MAP_KEY(i), MAP_VAL(i), M_SO_VER(request),
-						pFrom->GetId());
+				pSO->Set(MAP_KEY(i), MAP_VAL(i), pFrom->GetId());
 			}
 
 			return true;
-		}
-		case SOT_BW_SEND_MESSAGE:
-		{
-			if (pFrom->GetType() == PT_OUTBOUND_RTMP) {
-				return pFrom->HandleSOPrimitive(name, primitive);
-			} else {
-				if (pSO == NULL) {
-					FATAL("SO is null");
-					return false;
-				}
-				return pSO->SendMessage(request);
-			}
-		}
-		case SOT_SC_INITIAL_DATA:
-		case SOT_SC_CLEAR_DATA:
-		case SOT_CS_UPDATE_FIELD:
-		case SOT_SC_DELETE_FIELD:
-		case SOT_CS_UPDATE_FIELD_ACK:
-		{
-			return pFrom->HandleSOPrimitive(name, primitive);
 		}
 		default:
 		{
@@ -179,6 +143,7 @@ bool SOManager::ProcessSharedObjectPrimitive(BaseRTMPProtocol *pFrom, SO *pSO,
 			return false;
 		}
 	}
+	return true;
 }
 
 #endif /* HAS_PROTOCOL_RTMP */

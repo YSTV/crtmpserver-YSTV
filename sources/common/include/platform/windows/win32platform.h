@@ -101,23 +101,23 @@
 
 #include <string>
 #include <vector>
-#include <queue>
 #include <map>
+#include <fstream>
 #include <fcntl.h>
+#include <iostream>
 #include <sstream>
 #include <cctype>
 #include <algorithm>
-#include <stdint.h>
 using namespace std;
 
-/*typedef unsigned char uint8_t;
+typedef unsigned char uint8_t;
 typedef unsigned short int uint16_t;
 typedef unsigned long int uint32_t;
 typedef unsigned long long int uint64_t;
 typedef char int8_t;
 typedef short int int16_t;
 typedef long int int32_t;
-typedef long long int int64_t;*/
+typedef long long int int64_t;
 #define atoll atol
 
 #define DLLEXP __declspec(dllexport)
@@ -136,12 +136,10 @@ typedef long long int int64_t;*/
 #define MSG_NOSIGNAL 0
 #define READ_FD _read
 #define WRITE_FD _write
-#define CLOSE_SOCKET(fd) do{ if(fd>=0) closesocket(fd);fd=(SOCKET)-1;}while(0)
+#define CLOSE_SOCKET(fd) if((fd)>=0) closesocket((fd))
 #define LASTSOCKETERROR WSAGetLastError()
-#define SOCKERROR_EINPROGRESS			WSAEINPROGRESS
-#define SOCKERROR_EAGAIN				WSAEWOULDBLOCK
-#define SOCKERROR_ECONNRESET			WSAECONNRESET
-#define SOCKERROR_ENOBUFS				WSAENOBUFS
+#define SOCKERROR_CONNECT_IN_PROGRESS	WSAEWOULDBLOCK
+#define SOCKERROR_SEND_IN_PROGRESS		WSAEWOULDBLOCK
 #define SET_UNKNOWN 0
 #define SET_READ 1
 #define SET_WRITE 2
@@ -164,24 +162,16 @@ typedef long long int int64_t;*/
 #define Timestamp struct tm
 #define Timestamp_init {0, 0, 0, 0, 0, 0, 0, 0, 0}
 #define snprintf sprintf_s
-#define pid_t DWORD
-#define PIOFFT __int64
+#define pid_t int32_t
 
 #define gmtime_r(_p_time_t, _p_struct_tm) *(_p_struct_tm) = *gmtime(_p_time_t);
 
 #define CLOCKS_PER_SECOND 1000000L
-#define GETCLOCKS(result,type) \
+#define GETCLOCKS(result) \
 do { \
     struct timeval ___timer___; \
     gettimeofday(&___timer___,NULL); \
-    result=(type)___timer___.tv_sec*(type)CLOCKS_PER_SECOND+(type) ___timer___.tv_usec; \
-}while(0);
-
-#define GETMILLISECONDS(result) \
-do { \
-    struct timeval ___timer___; \
-    gettimeofday(&___timer___,NULL); \
-    result=(uint64_t)___timer___.tv_sec*1000+___timer___.tv_usec/1000; \
+    result=(double)___timer___.tv_sec*(double)CLOCKS_PER_SECOND+(double) ___timer___.tv_usec; \
 }while(0);
 
 #define GETNTP(result) \
@@ -211,16 +201,12 @@ typedef struct _select_event {
 #define IOVEC WSABUF
 #define MSGHDR_MSG_IOV lpBuffers
 #define MSGHDR_MSG_IOVLEN dwBufferCount
-#define MSGHDR_MSG_IOVLEN_TYPE DWORD
 #define MSGHDR_MSG_NAME name
 #define MSGHDR_MSG_NAMELEN namelen
 #define IOVEC_IOV_BASE buf
 #define IOVEC_IOV_LEN len
 #define IOVEC_IOV_BASE_TYPE CHAR
-#define SENDMSG(s,msg,flags,sent) WSASendMsg(s,msg,flags,(LPDWORD)(sent),NULL,NULL)
-
-#define ftell64 _ftelli64
-#define fseek64 _fseeki64
+#define SENDMSG(s,msg,flags,sent) WSASendMsg(s,msg,flags,sent,NULL,NULL)
 
 DLLEXP string format(string fmt, ...);
 DLLEXP string vFormat(string fmt, va_list args);
@@ -230,20 +216,17 @@ DLLEXP string lowerCase(string value);
 DLLEXP string upperCase(string value);
 DLLEXP string changeCase(string &value, bool lowerCase);
 DLLEXP string tagToString(uint64_t tag);
-DLLEXP bool setFdJoinMulticast(SOCKET sock, string bindIp, uint16_t bindPort, string ssmIp);
-DLLEXP bool setFdCloseOnExec(int fd);
-DLLEXP bool setFdNonBlock(SOCKET fd);
-DLLEXP bool setFdNoSIGPIPE(SOCKET fd);
-DLLEXP bool setFdKeepAlive(SOCKET fd, bool isUdp);
-DLLEXP bool setFdNoNagle(SOCKET fd, bool isUdp);
-DLLEXP bool setFdReuseAddress(SOCKET fd);
-DLLEXP bool setFdTTL(SOCKET fd, uint8_t ttl);
-DLLEXP bool setFdMulticastTTL(SOCKET fd, uint8_t ttl);
-DLLEXP bool setFdTOS(SOCKET fd, uint8_t tos);
-DLLEXP bool setFdOptions(SOCKET fd, bool isUdp);
+DLLEXP bool setFdNonBlock(int32_t fd);
+DLLEXP bool setFdNoSIGPIPE(int32_t fd);
+DLLEXP bool setFdKeepAlive(int32_t fd);
+DLLEXP bool setFdNoNagle(int32_t fd);
+DLLEXP bool setFdReuseAddress(int32_t fd);
+DLLEXP bool setFdTTL(int32_t fd, uint8_t ttl);
+DLLEXP bool setFdMulticastTTL(int32_t fd, uint8_t ttl);
+DLLEXP bool setFdTOS(int32_t fd, uint8_t tos);
+DLLEXP bool setFdOptions(int32_t fd);
 DLLEXP bool deleteFile(string path);
 DLLEXP bool deleteFolder(string path, bool force);
-DLLEXP bool createFolder(string path, bool recursive);
 DLLEXP string getHostByName(string name);
 DLLEXP bool isNumeric(string value);
 DLLEXP void split(string str, string separator, vector<string> &result);
@@ -261,8 +244,6 @@ DLLEXP bool listFolder(string path, vector<string> &result,
 		bool normalizeAllPaths = true, bool includeFolders = false,
 		bool recursive = true);
 DLLEXP bool moveFile(string src, string dst);
-DLLEXP bool isAbsolutePath(string &path);
-DLLEXP void installSignal(int sig, SignalFnc pSignalFnc);
 DLLEXP void installQuitSignal(SignalFnc pQuitSignalFnc);
 DLLEXP void installConfRereadSignal(SignalFnc pConfRereadSignalFnc);
 DLLEXP time_t timegm(struct tm *tm);
@@ -274,8 +255,7 @@ DLLEXP int gettimeofday(struct timeval *tv, void* tz);
 DLLEXP void InitNetworking();
 DLLEXP HMODULE UnicodeLoadLibrary(string fileName);
 DLLEXP int inet_aton(const char *pStr, struct in_addr *pRes);
-#define getutctime() time(NULL)
-DLLEXP time_t getlocaltime();
-DLLEXP time_t gettimeoffset();
+
+
 #endif /* _WIN32PLATFORM_H */
 #endif /* WIN32 */

@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -20,11 +20,9 @@
 
 #include "utils/logging/fileloglocation.h"
 #include "utils/lua/luautils.h"
-#include "utils/misc/file.h"
 
 FileLogLocation::FileLogLocation(Variant &configuration)
 : BaseLogLocation(configuration) {
-	_fileStream = NULL;
 	_canLog = false;
 	_counter = 0;
 	_newLineCharacters = "\n";
@@ -35,7 +33,7 @@ FileLogLocation::FileLogLocation(Variant &configuration)
 }
 
 FileLogLocation::~FileLogLocation() {
-	CloseFile();
+	_fileStream.close();
 }
 
 bool FileLogLocation::Init() {
@@ -92,10 +90,10 @@ void FileLogLocation::Log(int32_t level, string fileName, uint32_t lineNumber,
 		replace(logEntry, "\n", "\\n");
 	}
 	logEntry += _newLineCharacters;
-	_fileStream->WriteString(logEntry);
-	_fileStream->Flush();
+	_fileStream.write(STR(logEntry), logEntry.size());
+	_fileStream.flush();
 	if (_fileLength > 0) {
-		_currentLength += (uint32_t) logEntry.length();
+		_currentLength += logEntry.length();
 		if (_fileLength < _currentLength)
 			OpenFile();
 	}
@@ -111,22 +109,19 @@ void FileLogLocation::SignalFork() {
 }
 
 bool FileLogLocation::OpenFile() {
-	CloseFile();
+	_canLog = false;
+	_fileStream.close();
+	_fileIsClosed = true;
 	double ts;
-	GETCLOCKS(ts, double);
+	GETCLOCKS(ts);
 	ts = (ts / CLOCKS_PER_SECOND)*1000;
 	string temp = format("%s.%"PRIu64".%"PRIu64, STR(_fileName), (uint64_t) getpid(), (uint64_t) ts);
-	_fileStream = new File();
-	if (!_fileStream->Initialize(temp, FILE_OPEN_MODE_TRUNCATE)) {
+	ios_base::openmode openMode = ios_base::out | ios_base::binary | ios_base::trunc;
+	_fileStream.open(STR(temp), openMode);
+	if (_fileStream.fail()) {
 		return false;
 	}
-	temp = format("PID: %"PRIu64"; TIMESTAMP: %"PRIz"u%s",
-			(uint64_t) getpid(),
-			time(NULL),
-			STR(_newLineCharacters));
-	if (!_fileStream->WriteString(temp)) {
-		return false;
-	}
+	_fileStream << "PID: " << getpid() << "; TIMESTAMP: " << time(NULL) << endl;
 	if (_fileHistorySize > 0) {
 		ADD_VECTOR_END(_history, temp);
 		while (_history.size() > _fileHistorySize) {
@@ -138,13 +133,4 @@ bool FileLogLocation::OpenFile() {
 	_canLog = true;
 	_fileIsClosed = false;
 	return true;
-}
-
-void FileLogLocation::CloseFile() {
-	if (_fileStream != NULL) {
-		delete _fileStream;
-		_fileStream = NULL;
-	}
-	_fileIsClosed = true;
-	_canLog = false;
 }

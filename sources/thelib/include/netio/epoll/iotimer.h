@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -26,11 +26,7 @@
 class IOTimer
 : public IOHandler {
 private:
-#ifndef HAS_EPOLL_TIMERS
 	static int32_t _idGenerator;
-#else /*  */
-	uint64_t _count;
-#endif /* HAS_EPOLL_TIMERS */
 public:
 	IOTimer();
 	virtual ~IOTimer();
@@ -38,7 +34,6 @@ public:
 	virtual bool SignalOutputData();
 	virtual bool OnEvent(struct epoll_event &eventWrapper);
 	bool EnqueueForTimeEvent(uint32_t seconds);
-	bool EnqueueForHighGranularityTimeEvent(uint32_t milliseconds);
 	virtual operator string();
 	virtual void GetStats(Variant &info, uint32_t namespaceId = 0);
 };

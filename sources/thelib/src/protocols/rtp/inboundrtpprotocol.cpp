@@ -34,7 +34,6 @@ InboundRTPProtocol::InboundRTPProtocol()
 	_seqRollOver = 0;
 	_isAudio = false;
 	_packetsCount = 0;
-	_unsolicited = false;
 #ifdef RTP_DETECT_ROLLOVER
 	_lastTimestamp = 0;
 	_timestampRollover = 0;
@@ -42,11 +41,6 @@ InboundRTPProtocol::InboundRTPProtocol()
 }
 
 InboundRTPProtocol::~InboundRTPProtocol() {
-	// Free up _pInstream if this is unsolicited RTP
-	if (_unsolicited && (_pInStream != NULL)) {
-		delete _pInStream;
-		_pInStream = NULL;
-	}
 }
 
 bool InboundRTPProtocol::Initialize(Variant &parameters) {
@@ -181,11 +175,9 @@ uint32_t InboundRTPProtocol::GetExtendedSeq() {
 	return (((uint32_t) _seqRollOver) << 16) | _lastSeq;
 }
 
-void InboundRTPProtocol::SetStream(InNetRTPStream *pInStream, bool isAudio,
-		bool unsolicited) {
+void InboundRTPProtocol::SetStream(InNetRTPStream *pInStream, bool isAudio) {
 	_pInStream = pInStream;
 	_isAudio = isAudio;
-	_unsolicited = unsolicited;
 }
 
 void InboundRTPProtocol::SetInbboundConnectivity(InboundConnectivity *pConnectivity) {

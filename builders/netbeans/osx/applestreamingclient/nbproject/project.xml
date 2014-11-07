@@ -15,9 +15,11 @@
             </make-dep-projects>
             <sourceRootList>
                 <sourceRootElem>../../../sources/applications/applestreamingclient/include</sourceRootElem>
+                <sourceRootElem>../../../../sources/applications/applestreamingclient/include/protocols</sourceRootElem>
+                <sourceRootElem>../../../../sources/applications/applestreamingclient/include/eventsink</sourceRootElem>
                 <sourceRootElem>../../../sources/applications/applestreamingclient/src</sourceRootElem>
-                <sourceRootElem>../../../../sources/applications/applestreamingclient/include</sourceRootElem>
-                <sourceRootElem>../../../../sources/applications/applestreamingclient/src</sourceRootElem>
+                <sourceRootElem>../../../../sources/applications/applestreamingclient/src/protocols</sourceRootElem>
+                <sourceRootElem>../../../../sources/applications/applestreamingclient/src/eventsink</sourceRootElem>
             </sourceRootList>
             <confList>
                 <confElem>

@@ -82,7 +82,7 @@ bool InboundJSONCLIProtocol::SendMessage(Variant &message) {
 	}
 	json += "\r\n\r\n";
 	if (_useLengthPadding) {
-		uint32_t size = EHTONL((uint32_t) json.length());
+		uint32_t size = htonl(json.length());
 		_outputBuffer.ReadFromBuffer((uint8_t *) & size, 4);
 	}
 	_outputBuffer.ReadFromString(json);
@@ -119,7 +119,7 @@ bool InboundJSONCLIProtocol::ParseCommand(string &command) {
 	vector<string> list;
 
 	FOR_MAP(rawMap, string, string, i) {
-		key = MAP_KEY(i);
+		key = lowerCase(MAP_KEY(i));
 		replace(key, "_#space#_", " ");
 		replace(key, "_#slash#_", "\\");
 		replace(key, "_#equal#_", "=");

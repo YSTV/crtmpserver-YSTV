@@ -42,7 +42,7 @@ string format(string fmt, ...) {
 string vFormat(string fmt, va_list args) {
 	char *pBuffer = NULL;
 	if (vasprintf(&pBuffer, STR(fmt), args) == -1) {
-		o_assert(false);
+		assert(false);
 		return "";
 	}
 	string result = pBuffer;
@@ -102,71 +102,24 @@ string tagToString(uint64_t tag) {
 	return result;
 }
 
-bool setFdJoinMulticast(SOCKET sock, string bindIp, uint16_t bindPort, string ssmIp) {
-	if (ssmIp == "") {
-		struct ip_mreq group;
-		group.imr_multiaddr.s_addr = inet_addr(STR(bindIp));
-		group.imr_interface.s_addr = INADDR_ANY;
-		if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,
-				(char *) &group, sizeof (group)) < 0) {
-			int err = errno;
-			FATAL("Adding multicast failed. Error was: (%d) %s", err, strerror(err));
-			return false;
-		}
-		return true;
-	} else {
-		struct group_source_req multicast;
-		struct sockaddr_in *pGroup = (struct sockaddr_in*) &multicast.gsr_group;
-		struct sockaddr_in *pSource = (struct sockaddr_in*) &multicast.gsr_source;
-
-		memset(&multicast, 0, sizeof (multicast));
-
-		//Setup the group we want to join
-		pGroup->sin_family = AF_INET;
-		pGroup->sin_addr.s_addr = inet_addr(STR(bindIp));
-		pGroup->sin_port = EHTONS(bindPort);
-
-		//setup the source we want to listen
-		pSource->sin_family = AF_INET;
-		pSource->sin_addr.s_addr = inet_addr(STR(ssmIp));
-		if (pSource->sin_addr.s_addr == INADDR_NONE) {
-			FATAL("Unable to SSM on address %s", STR(ssmIp));
-			return false;
-		}
-		pSource->sin_port = 0;
-
-		INFO("Try to SSM on ip %s", STR(ssmIp));
-
-		if (setsockopt(sock, IPPROTO_IP, MCAST_JOIN_SOURCE_GROUP, &multicast,
-				sizeof (multicast)) < 0) {
-			int err = errno;
-			FATAL("Adding multicast failed. Error was: (%d) %s", err,
-					strerror(err));
-			return false;
-		}
-
-		return true;
-	}
-}
-
-bool setFdNonBlock(SOCKET fd) {
+bool setFdNonBlock(int32_t fd) {
 	int32_t arg;
 	if ((arg = fcntl(fd, F_GETFL, NULL)) < 0) {
-		int err = errno;
-		FATAL("Unable to get fd flags: (%d) %s", err, strerror(err));
+		int32_t err = errno;
+		FATAL("Unable to get fd flags: %d,%s", err, strerror(err));
 		return false;
 	}
 	arg |= O_NONBLOCK;
 	if (fcntl(fd, F_SETFL, arg) < 0) {
-		int err = errno;
-		FATAL("Unable to set fd flags: (%d) %s", err, strerror(err));
+		int32_t err = errno;
+		FATAL("Unable to set fd flags: %d,%s", err, strerror(err));
 		return false;
 	}
 
 	return true;
 }
 
-bool setFdNoSIGPIPE(SOCKET fd) {
+bool setFdNoSIGPIPE(int32_t fd) {
 	int32_t one = 1;
 	if (setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE,
 			(const char*) & one, sizeof (one)) != 0) {
@@ -176,9 +129,7 @@ bool setFdNoSIGPIPE(SOCKET fd) {
 	return true;
 }
 
-bool setFdKeepAlive(SOCKET fd, bool isUdp) {
-	if (isUdp)
-		return true;
+bool setFdKeepAlive(int32_t fd) {
 	int32_t one = 1;
 	if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE,
 			(const char*) & one, sizeof (one)) != 0) {
@@ -188,9 +139,7 @@ bool setFdKeepAlive(SOCKET fd, bool isUdp) {
 	return true;
 }
 
-bool setFdNoNagle(SOCKET fd, bool isUdp) {
-	if (isUdp)
-		return true;
+bool setFdNoNagle(int32_t fd) {
 	int32_t one = 1;
 	if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *) & one, sizeof (one)) != 0) {
 		return false;
@@ -198,7 +147,7 @@ bool setFdNoNagle(SOCKET fd, bool isUdp) {
 	return true;
 }
 
-bool setFdReuseAddress(SOCKET fd) {
+bool setFdReuseAddress(int32_t fd) {
 	int32_t one = 1;
 	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) & one, sizeof (one)) != 0) {
 		FATAL("Unable to reuse address");
@@ -211,39 +160,37 @@ bool setFdReuseAddress(SOCKET fd) {
 	return true;
 }
 
-bool setFdTTL(SOCKET fd, uint8_t ttl) {
+bool setFdTTL(int32_t fd, uint8_t ttl) {
 	int temp = ttl;
 	if (setsockopt(fd, IPPROTO_IP, IP_TTL, &temp, sizeof (temp)) != 0) {
 		int err = errno;
-		WARN("Unable to set IP_TTL: %"PRIu8"; error was (%d) %s", ttl, err, strerror(err));
+		WARN("Unable to set IP_TTL: %"PRIu8"; error was %"PRId32" %s", ttl, err, strerror(err));
 	}
 	return true;
 }
 
-bool setFdMulticastTTL(SOCKET fd, uint8_t ttl) {
+bool setFdMulticastTTL(int32_t fd, uint8_t ttl) {
 	int temp = ttl;
 	if (setsockopt(fd, IPPROTO_IP, IP_MULTICAST_TTL, &temp, sizeof (temp)) != 0) {
 		int err = errno;
-		WARN("Unable to set IP_MULTICAST_TTL: %"PRIu8"; error was (%d) %s", ttl, err, strerror(err));
+		WARN("Unable to set IP_MULTICAST_TTL: %"PRIu8"; error was %"PRId32" %s", ttl, err, strerror(err));
 	}
 	return true;
 }
 
-bool setFdTOS(SOCKET fd, uint8_t tos) {
+bool setFdTOS(int32_t fd, uint8_t tos) {
 	int temp = tos;
 	if (setsockopt(fd, IPPROTO_IP, IP_TOS, &temp, sizeof (temp)) != 0) {
 		int err = errno;
-		WARN("Unable to set IP_TOS: %"PRIu8"; error was (%d) %s", tos, err, strerror(err));
+		WARN("Unable to set IP_TOS: %"PRIu8"; error was %"PRId32" %s", tos, err, strerror(err));
 	}
 	return true;
 }
 
-bool setFdOptions(SOCKET fd, bool isUdp) {
-	if (!isUdp) {
-		if (!setFdNonBlock(fd)) {
-			FATAL("Unable to set non block");
-			return false;
-		}
+bool setFdOptions(int32_t fd) {
+	if (!setFdNonBlock(fd)) {
+		FATAL("Unable to set non block");
+		return false;
 	}
 
 	if (!setFdNoSIGPIPE(fd)) {
@@ -251,12 +198,12 @@ bool setFdOptions(SOCKET fd, bool isUdp) {
 		return false;
 	}
 
-	if (!setFdKeepAlive(fd, isUdp)) {
+	if (!setFdKeepAlive(fd)) {
 		FATAL("Unable to set keep alive");
 		return false;
 	}
 
-	if (!setFdNoNagle(fd, isUdp)) {
+	if (!setFdNoNagle(fd)) {
 		WARN("Unable to disable Nagle algorithm");
 	}
 
@@ -475,7 +422,7 @@ bool listFolder(string path, vector<string> &result, bool normalizeAllPaths,
 	pDir = opendir(STR(path));
 	if (pDir == NULL) {
 		int err = errno;
-		FATAL("Unable to open folder: %s (%d) %s", STR(path), err, strerror(err));
+		FATAL("Unable to open folder: %s %d %s", STR(path), err, strerror(err));
 		return false;
 	}
 
@@ -523,10 +470,6 @@ bool moveFile(string src, string dst) {
 	return true;
 }
 
-bool isAbsolutePath(string &path) {
-	return (bool)((path.size() > 0) && (path[0] == PATH_SEPARATOR));
-}
-
 void signalHandler(int sig) {
 	if (!MAP_HAS1(_signalHandlers, sig))
 		return;
@@ -549,31 +492,13 @@ void installSignal(int sig, SignalFnc pSignalFnc) {
 }
 
 void installQuitSignal(SignalFnc pQuitSignalFnc) {
-	installSignal(SIGTERM, pQuitSignalFnc);
+	installSignal(SIGINT, pQuitSignalFnc);
 }
 
 void installConfRereadSignal(SignalFnc pConfRereadSignalFnc) {
 	installSignal(SIGHUP, pConfRereadSignalFnc);
 }
 
-static time_t _gUTCOffset = -1;
-
-void computeUTCOffset() {
-	time_t now = time(NULL);
-	struct tm *pTemp = localtime(&now);
-	_gUTCOffset = pTemp->tm_gmtoff;
-}
-
-time_t getlocaltime() {
-	if (_gUTCOffset == -1)
-		computeUTCOffset();
-	return getutctime() + _gUTCOffset;
-}
-
-time_t gettimeoffset() {
-	if (_gUTCOffset == -1)
-		computeUTCOffset();
-	return _gUTCOffset;
-}
 
 #endif /* FREEBSD */
+

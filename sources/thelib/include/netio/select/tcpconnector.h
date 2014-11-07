@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -98,14 +98,14 @@ public:
 			vector<uint64_t>& protocolChain, Variant customParameters) {
 
 		int32_t fd = (int32_t) socket(PF_INET, SOCK_STREAM, 0);
-		if ((fd < 0) || (!setFdCloseOnExec(fd))) {
-			int err = LASTSOCKETERROR;
+		if (fd < 0) {
 			T::SignalProtocolCreated(NULL, customParameters);
-			FATAL("Unable to create fd: %d", err);
+			int err = LASTSOCKETERROR;
+			FATAL("Unable to create fd: %s(%d)", strerror(err), err);
 			return 0;
 		}
 
-		if (!setFdOptions(fd, false)) {
+		if (!setFdOptions(fd)) {
 			CLOSE_SOCKET(fd);
 			T::SignalProtocolCreated(NULL, customParameters);
 			FATAL("Unable to set socket options");
@@ -128,7 +128,7 @@ public:
 		sockaddr_in address;
 
 		address.sin_family = PF_INET;
-		address.sin_addr.s_addr = inet_addr(STR(_ip));
+		address.sin_addr.s_addr = inet_addr(_ip.c_str());
 		if (address.sin_addr.s_addr == INADDR_NONE) {
 			FATAL("Unable to translate string %s to a valid IP address", STR(_ip));
 			return 0;
@@ -142,8 +142,9 @@ public:
 
 		if (connect(_inboundFd, (sockaddr *) & address, sizeof (address)) != 0) {
 			int err = LASTSOCKETERROR;
-			if (err != SOCKERROR_EINPROGRESS) {
-				FATAL("Unable to connect to %s:%hu %d", STR(_ip), _port, err);
+			if (err != SOCKERROR_CONNECT_IN_PROGRESS) {
+				FATAL("Unable to connect to %s:%hu (%d) (%s)", STR(_ip), _port,
+						err, strerror(err));
 				_closeSocket = true;
 				return false;
 			}

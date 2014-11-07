@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -18,59 +18,101 @@
  */
 
 
-#if defined HAS_PROTOCOL_TS && defined HAS_MEDIA_TS
+#ifdef HAS_PROTOCOL_TS
 #ifndef _INNETTSSTREAM_H
 #define	_INNETTSSTREAM_H
 
 #include "streaming/baseinnetstream.h"
 #include "streaming/streamcapabilities.h"
 
+#define COMPUTE_DTS_TIME
+
+struct _PIDDescriptor;
+
 class DLLEXP InNetTSStream
 : public BaseInNetStream {
 private:
 	//audio section
-	bool _hasAudio;
+	_PIDDescriptor *_pAudioPidDescriptor;
+	int8_t _currentAudioSequenceNumber;
+	uint64_t _lastRawPtsAudio;
+	uint32_t _audioRollOverCount;
+	double _ptsTimeAudio;
+#ifdef COMPUTE_DTS_TIME
+	double _dtsTimeAudio;
+#endif
+	double _deltaTimeAudio;
+	IOBuffer _audioBuffer;
+	double _lastGotAudioTimestamp;
+	double _lastSentAudioTimestamp;
 	uint64_t _audioPacketsCount;
-	uint64_t _audioDroppedPacketsCount;
+	uint64_t _statsAudioPacketsCount;
 	uint64_t _audioBytesCount;
+	uint64_t _audioDroppedPacketsCount;
 	uint64_t _audioDroppedBytesCount;
 
-	//video section
-	bool _hasVideo;
-	uint64_t _videoPacketsCount;
-	uint64_t _videoDroppedPacketsCount;
-	uint64_t _videoBytesCount;
-	uint64_t _videoDroppedBytesCount;
 
+	//video section
+	_PIDDescriptor *_pVideoPidDescriptor;
+	int8_t _currentVideoSequenceNumber;
+	uint64_t _lastRawPtsVideo;
+	uint32_t _videoRollOverCount;
+	double _ptsTimeVideo;
+#ifdef COMPUTE_DTS_TIME
+	double _dtsTimeVideo;
+#endif
+	double _deltaTimeVideo;
+	uint64_t _videoPacketsCount;
+	uint64_t _videoBytesCount;
+	uint64_t _videoDroppedPacketsCount;
+	uint64_t _videoDroppedBytesCount;
+	IOBuffer _currentNal;
+
+	double _feedTime;
+
+	uint32_t _cursor;
 	StreamCapabilities _streamCapabilities;
-	bool _enabled;
+	bool _firstNAL;
+
+	IOBuffer _SPS;
+	IOBuffer _PPS;
 public:
-	InNetTSStream(BaseProtocol *pProtocol, string name, uint32_t bandwidthHint);
+	InNetTSStream(BaseProtocol *pProtocol, StreamsManager *pStreamsManager,
+			string name, uint32_t bandwidthHint);
 	virtual ~InNetTSStream();
 	virtual StreamCapabilities * GetCapabilities();
 
-	bool HasAudio();
-	void HasAudio(bool value);
-	bool HasVideo();
-	void HasVideo(bool value);
-	void Enable(bool value);
+	void SetAudioVideoPidDescriptors(_PIDDescriptor *pAudioPidDescriptor,
+			_PIDDescriptor *pVideoPidDescriptor);
 
+	double GetFeedTime();
+
+	bool FeedData(uint8_t *pData, uint32_t length, bool packetStart,
+			bool isAudio, int8_t sequenceNumber);
 	virtual bool FeedData(uint8_t *pData, uint32_t dataLength,
 			uint32_t processedLength, uint32_t totalLength,
-			double pts, double dts, bool isAudio);
+			double absoluteTimestamp, bool isAudio);
 	virtual void ReadyForSend();
 	virtual bool IsCompatibleWithType(uint64_t type);
 	virtual void SignalOutStreamAttached(BaseOutStream *pOutStream);
 	virtual void SignalOutStreamDetached(BaseOutStream *pOutStream);
-	virtual bool SignalPlay(double &dts, double &length);
+	virtual bool SignalPlay(double &absoluteTimestamp, double &length);
 	virtual bool SignalPause();
 	virtual bool SignalResume();
-	virtual bool SignalSeek(double &dts);
+	virtual bool SignalSeek(double &absoluteTimestamp);
 	virtual bool SignalStop();
 	virtual void GetStats(Variant &info, uint32_t namespaceId = 0);
+private:
+	bool HandleAudioData(uint8_t *pRawBuffer, uint32_t rawBufferLength,
+			double timestamp, bool packetStart);
+	bool HandleVideoData(uint8_t *pRawBuffer, uint32_t rawBufferLength,
+			double timestamp, bool packetStart);
+	bool ProcessNal(double timestamp);
+	void InitializeVideoCapabilities(uint8_t *pData, uint32_t length);
+	void InitializeAudioCapabilities(uint8_t *pData, uint32_t length);
 };
 
 
 #endif	/* _INNETTSSTREAM_H */
-#endif	/* defined HAS_PROTOCOL_TS && defined HAS_MEDIA_TS */
+#endif	/* HAS_PROTOCOL_TS */
 

@@ -69,11 +69,11 @@ void ConsoleLogLocation::Log(int32_t level, string fileName,
 #else
 	if (_allowColors) {
 		SET_CONSOLE_TEXT_COLOR(_colors[level]);
-		fprintf(stdout, "%s:%"PRIu32" %s", STR(fileName), lineNumber, STR(message));
+		cout << fileName << ":" << lineNumber << " " << message;
 		SET_CONSOLE_TEXT_COLOR(_colors[6]);
-		fprintf(stdout, "\n");
+		cout << endl;
 	} else {
-		fprintf(stdout, "%s:%"PRIu32" %s\n", STR(fileName), lineNumber, STR(message));
+		cout << fileName << ":" << lineNumber << " " << message << endl;
 	}
 #endif /* ANDROID */
 }

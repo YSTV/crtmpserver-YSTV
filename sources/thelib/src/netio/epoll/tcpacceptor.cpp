@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -24,7 +24,7 @@
 #ifdef NET_EPOLL
 #include "netio/epoll/tcpacceptor.h"
 #include "netio/epoll/iohandlermanager.h"
-#include "protocols/protocolfactorymanager.h"
+#include "protocols/protocolfactorymanager.h" 
 #include "protocols/tcpprotocol.h"
 #include "netio/epoll/tcpcarrier.h"
 #include "application/baseclientapplication.h"
@@ -36,8 +36,8 @@ TCPAcceptor::TCPAcceptor(string ipAddress, uint16_t port, Variant parameters,
 	memset(&_address, 0, sizeof (sockaddr_in));
 
 	_address.sin_family = PF_INET;
-	_address.sin_addr.s_addr = inet_addr(STR(ipAddress));
-	o_assert(_address.sin_addr.s_addr != INADDR_NONE);
+	_address.sin_addr.s_addr = inet_addr(ipAddress.c_str());
+	assert(_address.sin_addr.s_addr != INADDR_NONE);
 	_address.sin_port = EHTONS(port); //----MARKED-SHORT----
 
 	_protocolChain = protocolChain;
@@ -54,25 +54,24 @@ TCPAcceptor::~TCPAcceptor() {
 }
 
 bool TCPAcceptor::Bind() {
-	_inboundFd = _outboundFd = (int) socket(PF_INET, SOCK_STREAM, 0); //NOINHERIT
+	_inboundFd = _outboundFd = (int) socket(PF_INET, SOCK_STREAM, 0);
 	if (_inboundFd < 0) {
-		int err = errno;
-		FATAL("Unable to create socket: (%d) %s", err, strerror(err));
+		FATAL("Unable to create socket: %s(%d)", strerror(errno), errno);
 		return false;
 	}
 
-	if (!setFdOptions(_inboundFd, false)) {
+	if (!setFdOptions(_inboundFd)) {
 		FATAL("Unable to set socket options");
 		return false;
 	}
 
 	if (bind(_inboundFd, (sockaddr *) & _address, sizeof (sockaddr)) != 0) {
-		int err = errno;
-		FATAL("Unable to bind on address: tcp://%s:%hu; Error was: (%d) %s",
+		int error = errno;
+		FATAL("Unable to bind on address: tcp://%s:%hu; Error was: %s (%d)",
 				inet_ntoa(((sockaddr_in *) & _address)->sin_addr),
 				ENTOHS(((sockaddr_in *) & _address)->sin_port),
-				err,
-				strerror(err));
+				strerror(error),
+				error);
 		return false;
 	}
 
@@ -95,7 +94,7 @@ bool TCPAcceptor::Bind() {
 }
 
 void TCPAcceptor::SetApplication(BaseClientApplication *pApplication) {
-	o_assert(_pApplication == NULL);
+	assert(_pApplication == NULL);
 	_pApplication = pApplication;
 }
 
@@ -129,26 +128,32 @@ bool TCPAcceptor::Accept() {
 	memset(&address, 0, sizeof (sockaddr));
 	socklen_t len = sizeof (sockaddr);
 	int32_t fd;
+	int32_t error;
 
 	//1. Accept the connection
 	fd = accept(_inboundFd, &address, &len);
-	if ((fd < 0) || (!setFdCloseOnExec(fd))) {
-		int err = errno;
-		FATAL("Unable to accept client connection: (%d) %s", err, strerror(err));
+	error = errno;
+	if (fd < 0) {
+		FATAL("Unable to accept client connection: %s (%d)", strerror(error), error);
 		return false;
 	}
 	if (!_enabled) {
 		CLOSE_SOCKET(fd);
 		_droppedCount++;
-		WARN("Acceptor is not enabled. Client dropped: %s:%"PRIu16" -> %s:%"PRIu16,
+		WARN("Acceptor is not enabled. Client dropped: %s:%hu -> %s:%hu",
 				inet_ntoa(((sockaddr_in *) & address)->sin_addr),
 				ENTOHS(((sockaddr_in *) & address)->sin_port),
 				STR(_ipAddress),
 				_port);
 		return true;
 	}
+	INFO("Client connected: %s:%hu -> %s:%hu",
+			inet_ntoa(((sockaddr_in *) & address)->sin_addr),
+			ENTOHS(((sockaddr_in *) & address)->sin_port),
+			STR(_ipAddress),
+			_port);
 
-	if (!setFdOptions(fd, false)) {
+	if (!setFdOptions(fd)) {
 		FATAL("Unable to set socket options");
 		CLOSE_SOCKET(fd);
 		return false;
@@ -178,40 +183,7 @@ bool TCPAcceptor::Accept() {
 
 	_acceptedCount++;
 
-	INFO("Client connected: %s:%"PRIu16" -> %s:%"PRIu16,
-			inet_ntoa(((sockaddr_in *) & address)->sin_addr),
-			ENTOHS(((sockaddr_in *) & address)->sin_port),
-			STR(pTCPCarrier->GetNearEndpointAddressIp()),
-			pTCPCarrier->GetNearEndpointPort());
-
 	//7. Done
-	return true;
-}
-
-bool TCPAcceptor::Drop() {
-	sockaddr address;
-	memset(&address, 0, sizeof (sockaddr));
-	socklen_t len = sizeof (sockaddr);
-
-
-	//1. Accept the connection
-	int32_t fd = accept(_inboundFd, &address, &len);
-	if ((fd < 0) || (!setFdCloseOnExec(fd))) {
-		int err = errno;
-		if (err != EWOULDBLOCK)
-			WARN("Accept failed. Error code was: (%d) %s", err, strerror(err));
-		return false;
-	}
-
-	//2. Drop it now
-	CLOSE_SOCKET(fd);
-	_droppedCount++;
-
-	INFO("Client explicitly dropped: %s:%"PRIu16" -> %s:%"PRIu16,
-			inet_ntoa(((sockaddr_in *) & address)->sin_addr),
-			ENTOHS(((sockaddr_in *) & address)->sin_port),
-			STR(_ipAddress),
-			_port);
 	return true;
 }
 

@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -23,12 +23,9 @@
 
 #include "protocols/baseprotocol.h"
 
-class OutboundConnectivity;
-
 class NATTraversalProtocol
 : public BaseProtocol {
 	sockaddr_in *_pOutboundAddress;
-	OutboundConnectivity *_pConnectivity;
 public:
 	NATTraversalProtocol();
 	virtual ~NATTraversalProtocol();
@@ -39,12 +36,8 @@ public:
 	virtual bool SignalInputData(int32_t recvAmount);
 	virtual bool SignalInputData(IOBuffer &buffer);
 	virtual bool SignalInputData(IOBuffer &buffer, sockaddr_in *pPeerAddress);
-
+	
 	void SetOutboundAddress(sockaddr_in *pOutboundAddress);
-
-	void SetOutboundConnectivity(OutboundConnectivity *pConnectivity);
-	void ResetOutboundConnectivity();
-	virtual void ReadyForSend();
 };
 
 #endif	/* _NATTRAVERSALPROTOCOL_H */

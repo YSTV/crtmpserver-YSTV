@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -26,16 +26,11 @@ File::File() {
 	_path = "";
 	_truncate = false;
 	_append = false;
-	_pFile = NULL;
-	_suppressLogErrorsOnInit = false;
 }
 
 File::~File() {
-	Close();
-}
-
-void File::SuppressLogErrorsOnInit() {
-	_suppressLogErrorsOnInit = true;
+	_file.flush();
+	_file.close();
 }
 
 bool File::Initialize(string path) {
@@ -43,28 +38,29 @@ bool File::Initialize(string path) {
 }
 
 bool File::Initialize(string path, FILE_OPEN_MODE mode) {
-	Close();
 	_path = path;
-	string openMode = "";
+	ios_base::openmode openMode = ios_base::binary;
 	switch (mode) {
 		case FILE_OPEN_MODE_READ:
 		{
-			openMode = "rb";
-			break;
-		}
-		case FILE_OPEN_MODE_WRITE:
-		{
-			openMode = "r+b";
+			openMode |= ios_base::in;
 			break;
 		}
 		case FILE_OPEN_MODE_TRUNCATE:
 		{
-			openMode = "w+b";
+			openMode |= ios_base::in;
+			openMode |= ios_base::out;
+			openMode |= ios_base::trunc;
 			break;
 		}
 		case FILE_OPEN_MODE_APPEND:
 		{
-			openMode = "a+b";
+			openMode |= ios_base::in;
+			openMode |= ios_base::out;
+			if (fileExists(_path))
+				openMode |= ios_base::app;
+			else
+				openMode |= ios_base::trunc;
 			break;
 		}
 		default:
@@ -74,20 +70,17 @@ bool File::Initialize(string path, FILE_OPEN_MODE mode) {
 		}
 	}
 
-	_pFile = fopen(STR(_path), STR(openMode)); //NOINHERIT
-
-	if (_pFile == NULL) {
-		int err = errno;
-		if (!_suppressLogErrorsOnInit)
-			FATAL("Unable to open file %s with mode `%s`. Error was: (%d) %s",
-				STR(_path), STR(openMode), err, strerror(err));
+	_file.open(STR(_path), openMode);
+	if (_file.fail()) {
+		FATAL("Unable to open file %s with mode 0x%x (%s)",
+				STR(_path), (uint32_t) openMode, strerror(errno));
 		return false;
 	}
 
 	if (!SeekEnd())
 		return false;
 
-	_size = ftell64(_pFile);
+	_size = _file.tellg();
 
 	if (!SeekBegin())
 		return false;
@@ -96,57 +89,37 @@ bool File::Initialize(string path, FILE_OPEN_MODE mode) {
 }
 
 void File::Close() {
-	if (_pFile != NULL) {
-		fflush(_pFile);
-		fclose(_pFile);
-		_pFile = NULL;
-	}
-	_size = 0;
-	_path = "";
-	_truncate = false;
-	_append = false;
+	_file.flush();
+	_file.close();
 }
 
 uint64_t File::Size() {
-	if (_pFile == NULL) {
-		WARN("File not opened");
-		return 0;
-	}
 	return _size;
 }
 
 uint64_t File::Cursor() {
-	if (_pFile == NULL) {
-		WARN("File not opened");
-		return 0;
-	}
-	return (uint64_t) ftell64(_pFile);
+	return (uint64_t) _file.tellg();
 }
 
 bool File::IsEOF() {
-	if (_pFile == NULL) {
-		WARN("File not opened");
-		return true;
-	}
-	return (feof(_pFile) != 0);
+	return _file.eof();
 }
 
 string File::GetPath() {
 	return _path;
 }
 
+bool File::Failed() {
+	return _file.fail();
+}
+
 bool File::IsOpen() {
-	if (_pFile == NULL)
-		return false;
-	return (ferror(_pFile) == 0);
+	return _file.is_open();
 }
 
 bool File::SeekBegin() {
-	if (_pFile == NULL) {
-		FATAL("File not opened");
-		return false;
-	}
-	if (fseek64(_pFile, 0, SEEK_SET) != 0) {
+	_file.seekg(0, ios_base::beg);
+	if (_file.fail()) {
 		FATAL("Unable to seek to the beginning of file");
 		return false;
 	}
@@ -154,11 +127,8 @@ bool File::SeekBegin() {
 }
 
 bool File::SeekEnd() {
-	if (_pFile == NULL) {
-		FATAL("File not opened");
-		return false;
-	}
-	if (fseek64(_pFile, 0, SEEK_END) != 0) {
+	_file.seekg(0, ios_base::end);
+	if (_file.fail()) {
 		FATAL("Unable to seek to the end of file");
 		return false;
 	}
@@ -166,13 +136,8 @@ bool File::SeekEnd() {
 }
 
 bool File::SeekAhead(int64_t count) {
-	if (_pFile == NULL) {
-		FATAL("File not opened");
-		return false;
-	}
-
 	if (count < 0) {
-		FATAL("Invalid count");
+		FATAL("Invali count");
 		return false;
 	}
 
@@ -181,22 +146,17 @@ bool File::SeekAhead(int64_t count) {
 		return false;
 	}
 
-	if (fseek64(_pFile, (PIOFFT) count, SEEK_CUR) != 0) {
+	_file.seekg(count, ios_base::cur);
+	if (_file.fail()) {
 		FATAL("Unable to seek ahead %"PRId64" bytes", count);
 		return false;
 	}
-
 	return true;
 }
 
 bool File::SeekBehind(int64_t count) {
-	if (_pFile == NULL) {
-		FATAL("File not opened");
-		return false;
-	}
-
 	if (count < 0) {
-		FATAL("Invalid count");
+		FATAL("Invali count");
 		return false;
 	}
 
@@ -205,26 +165,22 @@ bool File::SeekBehind(int64_t count) {
 		return false;
 	}
 
-	if (fseek64(_pFile, (PIOFFT) (-1 * count), SEEK_CUR) != 0) {
+	_file.seekg((-1) * count, ios_base::cur);
+	if (_file.fail()) {
 		FATAL("Unable to seek behind %"PRId64" bytes", count);
 		return false;
 	}
-
 	return true;
 }
 
 bool File::SeekTo(uint64_t position) {
-	if (_pFile == NULL) {
-		FATAL("File not opened");
-		return false;
-	}
-
 	if (_size < position) {
 		FATAL("End of file will be reached");
 		return false;
 	}
 
-	if (fseek64(_pFile, (PIOFFT) position, SEEK_SET) != 0) {
+	_file.seekg(position, ios_base::beg);
+	if (_file.fail()) {
 		FATAL("Unable to seek to position %"PRIu64, position);
 		return false;
 	}
@@ -303,20 +259,19 @@ bool File::ReadUI64(uint64_t *pValue, bool networkOrder) {
 }
 
 bool File::ReadBuffer(uint8_t *pBuffer, uint64_t count) {
-	if (_pFile == NULL) {
-		FATAL("File not opened");
+	_file.read((char *) pBuffer, count);
+	if (_file.fail()) {
+		FATAL("Unable to read %"PRIu64" bytes from the file. Cursor: %"PRIu64" (0x%"PRIx64"); %d (%s)",
+				count, Cursor(), Cursor(), errno, strerror(errno));
 		return false;
 	}
-	if (count == 0)
-		return true;
-	if (count > 0xffffffffLL) {
-		FATAL("Can't read more than 4GB of data at once");
-		return false;
-	}
-	if (fread(pBuffer, (uint32_t) count, 1, _pFile) != 1) {
-		int err = errno;
-		FATAL("Unable to read %"PRIu64" bytes from the file. Cursor: %"PRIu64" (0x%"PRIx64"); (%d) %s",
-				count, Cursor(), Cursor(), err, strerror(err));
+	return true;
+}
+
+bool File::ReadLine(uint8_t *pBuffer, uint64_t &maxSize) {
+	_file.getline((char *) pBuffer, maxSize);
+	if (_file.fail()) {
+		FATAL("Unable to read line from the file");
 		return false;
 	}
 	return true;
@@ -477,31 +432,20 @@ bool File::WriteString(string &value) {
 }
 
 bool File::WriteBuffer(const uint8_t *pBuffer, uint64_t count) {
-	if (_pFile == NULL) {
-		FATAL("File not opened");
-		return false;
-	}
-	if (count == 0)
-		return true;
-	if (count > 0xffffffffLL) {
-		FATAL("Can't write more than 4GB of data at once");
-		return false;
-	}
-	if (fwrite(pBuffer, (uint32_t) count, 1, _pFile) != 1) {
+	_file.write((char *) pBuffer, count);
+	if (_file.fail()) {
 		FATAL("Unable to write %"PRIu64" bytes to file", count);
 		return false;
 	}
-	_size += count;
-
 	return true;
 }
 
 bool File::Flush() {
-	if (_pFile == NULL) {
-		FATAL("File not opened");
+	_file.flush();
+	if (_file.fail()) {
+		FATAL("Unable to flush to file");
 		return false;
 	}
-	fflush(_pFile);
-	return IsOpen();
+	return true;
 }
 

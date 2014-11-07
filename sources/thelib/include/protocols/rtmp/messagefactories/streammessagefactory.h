@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -32,12 +32,9 @@ public:
 	static Variant GetUserControlStreamEof(uint32_t streamId);
 	static Variant GetUserControlStreamDry(uint32_t streamId);
 	static Variant GetUserControlStreamIsRecorded(uint32_t streamId);
-	static Variant GetUserControlStreamSetBufferlength(uint32_t streamId,
-			uint32_t value);
 
 	//management requests
 	static Variant GetInvokeCreateStream();
-	static Variant GetInvokeReleaseStream(string streamName);
 	static Variant GetInvokeCloseStream(uint32_t channelId, uint32_t streamId);
 	static Variant GetInvokeDeleteStream(uint32_t channelId, uint32_t streamId);
 	static Variant GetInvokePublish(uint32_t channelId, uint32_t streamId,
@@ -45,7 +42,6 @@ public:
 	static Variant GetInvokePlay(uint32_t channelId, uint32_t streamId,
 			string streamName, double start, double length);
 	static Variant GetInvokeFCSubscribe(string streamName);
-	static Variant GetInvokeFCPublish(string streamName);
 
 	//management responses
 	static Variant GetInvokeCreateStreamResult(Variant &request,
@@ -56,9 +52,6 @@ public:
 			uint32_t streamId, uint32_t requestId, double releasedStreamId);
 	static Variant GetInvokeReleaseStreamErrorNotFound(Variant &request);
 	static Variant GetInvokeOnFCPublish(uint32_t channelId,
-			uint32_t streamId, double timeStamp, bool isAbsolute,
-			double requestId, string code, string description);
-	static Variant GetInvokeOnFCSubscribe(uint32_t channelId,
 			uint32_t streamId, double timeStamp, bool isAbsolute,
 			double requestId, string code, string description);
 
@@ -101,7 +94,7 @@ public:
 			bool unknown1, bool unknown2);
 	static Variant GetNotifyOnMetaData(uint32_t channelId,
 			uint32_t streamId, double timeStamp, bool isAbsolute,
-			Variant metadata, bool dataKeyFrame);
+			Variant metadata);
 	static Variant GetNotifyOnPlayStatusPlayComplete(uint32_t channelId,
 			uint32_t streamId, double timeStamp, bool isAbsolute,
 			double bytes, double duration);

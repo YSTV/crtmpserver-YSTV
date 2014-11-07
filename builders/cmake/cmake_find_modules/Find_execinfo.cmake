@@ -1,5 +1,5 @@
 MESSAGE(STATUS "Looking for execinfo")
-FIND_PATH(EXECINFO_INCLUDE_PATH
+FIND_PATH(EXECINFO_INCLUDE_PATH 
 	NAMES
 		execinfo.h
 	PATHS
@@ -13,21 +13,12 @@ FIND_LIBRARY(EXECINFO_LIBRARY_PATH
 	NAMES
 		execinfo
 	PATHS
-		${TOOLCHAIN_LIBRARY_PATH}
-		/lib64
 		/usr/lib64
-		/usr/local/lib64
-		/lib/x86_64-linux-gnu
-		/usr/lib/x86_64-linux-gnu
-		/opt/local/lib64
-		/sw/lib64
-		/lib
 		/usr/lib
+		/usr/local/lib64
 		/usr/local/lib
-		/lib/i386-linux-gnu
-		/usr/lib/i386-linux-gnu
-		/opt/local/lib
 		/sw/lib
+		/opt/local/lib
 		NO_DEFAULT_PATH)
 
 IF(EXECINFO_INCLUDE_PATH)

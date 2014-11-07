@@ -1,18 +1,18 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
- *
+ *  
  *  This file is part of crtmpserver.
  *  crtmpserver is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
  *  (at your option) any later version.
- *
+ *  
  *  crtmpserver is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
- *
+ *  
  *  You should have received a copy of the GNU General Public License
  *  along with crtmpserver.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -25,7 +25,6 @@
 #include "streaming/baseinfilestream.h"
 #include "protocols/rtmp/header.h"
 #include "protocols/rtmp/amf0serializer.h"
-#include "mediaformats/readers/streammetadataresolver.h"
 
 
 class BaseRTMPProtocol;
@@ -39,7 +38,7 @@ private:
 	public:
 		BaseBuilder();
 		virtual ~BaseBuilder();
-		virtual bool BuildFrame(MediaFile *pFile, MediaFrame &mediaFrame,
+		virtual bool BuildFrame(FileClass *pFile, MediaFrame &mediaFrame,
 				IOBuffer &buffer) = 0;
 	};
 
@@ -51,7 +50,7 @@ private:
 	public:
 		AVCBuilder();
 		virtual ~AVCBuilder();
-		virtual bool BuildFrame(MediaFile *pFile, MediaFrame &mediaFrame,
+		virtual bool BuildFrame(FileClass *pFile, MediaFrame &mediaFrame,
 				IOBuffer &buffer);
 	};
 
@@ -62,7 +61,7 @@ private:
 	public:
 		AACBuilder();
 		virtual ~AACBuilder();
-		virtual bool BuildFrame(MediaFile *pFile, MediaFrame &mediaFrame,
+		virtual bool BuildFrame(FileClass *pFile, MediaFrame &mediaFrame,
 				IOBuffer &buffer);
 	};
 
@@ -72,7 +71,7 @@ private:
 	public:
 		MP3Builder();
 		virtual ~MP3Builder();
-		virtual bool BuildFrame(MediaFile *pFile, MediaFrame &mediaFrame,
+		virtual bool BuildFrame(FileClass *pFile, MediaFrame &mediaFrame,
 				IOBuffer &buffer);
 	};
 
@@ -80,7 +79,7 @@ private:
 	public:
 		PassThroughBuilder();
 		virtual ~PassThroughBuilder();
-		virtual bool BuildFrame(MediaFile *pFile, MediaFrame &mediaFrame,
+		virtual bool BuildFrame(FileClass *pFile, MediaFrame &mediaFrame,
 				IOBuffer &buffer);
 	};
 private:
@@ -93,33 +92,34 @@ private:
 	Variant _metadataParameters;
 	Variant _tempVariant;
 protected:
-	Metadata _completeMetadata;
+	Variant _completeMetadata;
 	uint32_t _chunkSize;
 public:
-	InFileRTMPStream(BaseProtocol *pProtocol,uint64_t type, string name);
+	InFileRTMPStream(BaseProtocol *pProtocol, StreamsManager *pStreamsManager,
+			string name);
 	virtual ~InFileRTMPStream();
 
-	virtual bool Initialize(Metadata &metadata, TimerType timerType,
-			uint32_t granularity);
+	virtual bool Initialize(int32_t clientSideBufferLength);
+
 	virtual bool FeedData(uint8_t *pData, uint32_t dataLength,
 			uint32_t processedLength, uint32_t totalLength,
-			double pts, double dts, bool isAudio);
+			double absoluteTimestamp, bool isAudio);
 
 	virtual bool IsCompatibleWithType(uint64_t type);
 
 	uint32_t GetChunkSize();
 
 	static InFileRTMPStream *GetInstance(BaseRTMPProtocol *pRTMPProtocol,
-			StreamsManager *pStreamsManager, Metadata &metadata);
+			StreamsManager *pStreamsManager, Variant &metadata);
 
-	void SetCompleteMetadata(Metadata &completeMetadata);
-	Metadata &GetCompleteMetadata();
+	void SetCompleteMetadata(Variant &completeMetadata);
+	Variant GetCompleteMetadata();
 	virtual void SignalOutStreamAttached(BaseOutStream *pOutStream);
 	virtual void SignalOutStreamDetached(BaseOutStream *pOutStream);
 
-	virtual bool BuildFrame(MediaFile *pFile, MediaFrame &mediaFrame,
+	virtual bool BuildFrame(FileClass *pFile, MediaFrame &mediaFrame,
 			IOBuffer &buffer);
-	virtual bool FeedMetaData(MediaFile *pFile, MediaFrame &mediaFrame);
+	virtual bool FeedMetaData(FileClass *pFile, MediaFrame &mediaFrame);
 
 };
 

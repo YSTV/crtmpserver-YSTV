@@ -22,7 +22,6 @@
 
 #include "vmlua/basevmlua.h"
 
-
 BaseVMLua::BaseVMLua()
 : BaseVM() {
 	_pGlobalState = NULL;

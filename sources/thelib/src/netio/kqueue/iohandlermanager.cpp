@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -34,12 +34,11 @@ struct kevent *IOHandlerManager::_pDetectedEvents = NULL;
 struct kevent *IOHandlerManager::_pPendingEvents = NULL;
 int32_t IOHandlerManager::_pendingEventsCount = 0;
 int32_t IOHandlerManager::_eventsSize = 0;
-FdStats IOHandlerManager::_fdStats;
 #ifndef HAS_KQUEUE_TIMERS
 struct timespec IOHandlerManager::_timeout = {1, 0};
 TimersManager *IOHandlerManager::_pTimersManager = NULL;
 struct kevent IOHandlerManager::_dummy = {0, EVFILT_TIMER, 0, 0, 0, NULL};
-#endif /* HAS_KQUEUE_TIMERS */
+#endif
 
 void IOHandlerManager::SetupToken(IOHandler *pIOHandler) {
 	IOHandlerManagerToken *pResult = NULL;
@@ -81,28 +80,19 @@ map<uint32_t, IOHandler *> & IOHandlerManager::GetDeadHandlers() {
 	return _deadIOHandlers;
 }
 
-FdStats &IOHandlerManager::GetStats(bool updateSpeeds) {
-#ifdef GLOBALLY_ACCOUNT_BYTES
-	if (updateSpeeds)
-		_fdStats.UpdateSpeeds();
-#endif /* GLOBALLY_ACCOUNT_BYTES */
-	return _fdStats;
-}
-
 void IOHandlerManager::Initialize() {
-	_fdStats.Reset();
 	_kq = 0;
 	_pAvailableTokens = &_tokensVector1;
 	_pRecycledTokens = &_tokensVector2;
 #ifndef HAS_KQUEUE_TIMERS
 	_pTimersManager = new TimersManager(ProcessTimer);
-#endif /* HAS_KQUEUE_TIMERS */
+#endif
 	ResizeEvents();
 }
 
 void IOHandlerManager::Start() {
 	_kq = kqueue();
-	o_assert(_kq > 0);
+	assert(_kq > 0);
 }
 
 void IOHandlerManager::SignalShutdown() {
@@ -131,7 +121,7 @@ void IOHandlerManager::Shutdown() {
 #ifndef HAS_KQUEUE_TIMERS
 	delete _pTimersManager;
 	_pTimersManager = NULL;
-#endif /* HAS_KQUEUE_TIMERS */
+#endif
 
 	free(_pPendingEvents);
 	_pPendingEvents = NULL;
@@ -142,7 +132,7 @@ void IOHandlerManager::Shutdown() {
 	_eventsSize = 0;
 
 	if (_activeIOHandlers.size() != 0 || _deadIOHandlers.size() != 0) {
-		FATAL("Incomplete shutdown!");
+		FATAL("Incomplete shutdown!!!");
 	}
 }
 
@@ -153,14 +143,12 @@ void IOHandlerManager::RegisterIOHandler(IOHandler* pIOHandler) {
 	size_t before = _activeIOHandlers.size();
 	_activeIOHandlers[pIOHandler->GetId()] = pIOHandler;
 	SetupToken(pIOHandler);
-	_fdStats.RegisterManaged(pIOHandler->GetType());
 	DEBUG("Handlers count changed: %"PRIz"u->%"PRIz"u %s", before, before + 1,
 			STR(IOHandler::IOHTToString(pIOHandler->GetType())));
 }
 
 void IOHandlerManager::UnRegisterIOHandler(IOHandler *pIOHandler) {
 	if (MAP_HAS1(_activeIOHandlers, pIOHandler->GetId())) {
-		_fdStats.UnRegisterManaged(pIOHandler->GetType());
 		FreeToken(pIOHandler);
 		size_t before = _activeIOHandlers.size();
 		_activeIOHandlers.erase(pIOHandler->GetId());
@@ -168,43 +156,6 @@ void IOHandlerManager::UnRegisterIOHandler(IOHandler *pIOHandler) {
 				STR(IOHandler::IOHTToString(pIOHandler->GetType())));
 	}
 }
-
-int IOHandlerManager::CreateRawUDPSocket() {
-	int result = socket(AF_INET, SOCK_DGRAM, 0);
-	if ((result >= 0)&&(setFdCloseOnExec(result))) {
-		_fdStats.RegisterRawUdp();
-	} else {
-		int err = errno;
-		FATAL("Unable to create raw udp socket. Error code was: (%d) %s",
-				err, strerror(err));
-	}
-	return result;
-}
-
-void IOHandlerManager::CloseRawUDPSocket(int socket) {
-	if (socket > 0) {
-		_fdStats.UnRegisterRawUdp();
-	}
-	CLOSE_SOCKET(socket);
-}
-#ifdef GLOBALLY_ACCOUNT_BYTES
-
-void IOHandlerManager::AddInBytesManaged(IOHandlerType type, uint64_t bytes) {
-	_fdStats.AddInBytesManaged(type, bytes);
-}
-
-void IOHandlerManager::AddOutBytesManaged(IOHandlerType type, uint64_t bytes) {
-	_fdStats.AddOutBytesManaged(type, bytes);
-}
-
-void IOHandlerManager::AddInBytesRawUdp(uint64_t bytes) {
-	_fdStats.AddInBytesRawUdp(bytes);
-}
-
-void IOHandlerManager::AddOutBytesRawUdp(uint64_t bytes) {
-	_fdStats.AddOutBytesRawUdp(bytes);
-}
-#endif /* GLOBALLY_ACCOUNT_BYTES */
 
 bool IOHandlerManager::EnableReadData(IOHandler *pIOHandler) {
 	return RegisterEvent(pIOHandler->GetInboundFd(), EVFILT_READ,
@@ -247,29 +198,14 @@ bool IOHandlerManager::EnableTimer(IOHandler *pIOHandler, uint32_t seconds) {
 	return RegisterEvent(pIOHandler->GetId(), EVFILT_TIMER,
 			EV_ADD | EV_ENABLE, NOTE_USECONDS,
 			seconds*KQUEUE_TIMER_MULTIPLIER, pIOHandler->GetIOHandlerManagerToken());
-#else /* HAS_KQUEUE_TIMERS */
-	TimerEvent event = {0, 0, 0, 0};
+#else
+	TimerEvent event = {0, 0, 0};
 	event.id = pIOHandler->GetId();
-	event.period = seconds * 1000;
+	event.period = seconds;
 	event.pUserData = pIOHandler->GetIOHandlerManagerToken();
 	_pTimersManager->AddTimer(event);
 	return true;
-#endif /* HAS_KQUEUE_TIMERS */
-}
-
-bool IOHandlerManager::EnableHighGranularityTimer(IOHandler *pIOHandler, uint32_t milliseconds) {
-#ifdef HAS_KQUEUE_TIMERS
-	return RegisterEvent(pIOHandler->GetId(), EVFILT_TIMER,
-			EV_ADD | EV_ENABLE, NOTE_USECONDS,
-			milliseconds * (KQUEUE_TIMER_MULTIPLIER / 1000), pIOHandler->GetIOHandlerManagerToken());
-#else /* HAS_KQUEUE_TIMERS */
-	TimerEvent event = {0, 0, 0, 0};
-	event.id = pIOHandler->GetId();
-	event.period = milliseconds;
-	event.pUserData = pIOHandler->GetIOHandlerManagerToken();
-	_pTimersManager->AddTimer(event);
-	return true;
-#endif /* HAS_KQUEUE_TIMERS */
+#endif
 }
 
 bool IOHandlerManager::DisableTimer(IOHandler *pIOHandler, bool ignoreError) {
@@ -277,10 +213,10 @@ bool IOHandlerManager::DisableTimer(IOHandler *pIOHandler, bool ignoreError) {
 	return RegisterEvent(pIOHandler->GetId(), EVFILT_TIMER,
 			EV_DELETE, 0, 0,
 			pIOHandler->GetIOHandlerManagerToken(), ignoreError);
-#else /* HAS_KQUEUE_TIMERS */
+#else
 	_pTimersManager->RemoveTimer(pIOHandler->GetId());
 	return true;
-#endif /* HAS_KQUEUE_TIMERS */
+#endif
 }
 
 void IOHandlerManager::EnqueueForDelete(IOHandler *pIOHandler) {
@@ -309,20 +245,17 @@ bool IOHandlerManager::Pulse() {
 	result = kevent(_kq, _pPendingEvents, _pendingEventsCount,
 			_pDetectedEvents, _eventsSize, NULL);
 	_pendingEventsCount = 0;
-#else /* HAS_KQUEUE_TIMERS */
+#else
 	result = kevent(_kq, _pPendingEvents, _pendingEventsCount,
 			_pDetectedEvents, _eventsSize, &_timeout);
+
 	_pendingEventsCount = 0;
-	int32_t nextVal = _pTimersManager->TimeElapsed();
-	_timeout.tv_sec = nextVal / 1000;
-	_timeout.tv_nsec = (nextVal * 1000000) % 1000000000;
-#endif /* HAS_KQUEUE_TIMERS */
+	_pTimersManager->TimeElapsed(time(NULL));
+#endif
 
 	if (result < 0) {
-		int err = errno;
-		if (err == EINTR)
-			return true;
-		FATAL("kevent failed: (%d) %s", err, strerror(err));
+		int32_t error = errno;
+		FATAL("kevent failed: %d = `%s`", error, strerror(error));
 		return false;
 	}
 	for (int32_t i = 0; i < result; i++) {
@@ -362,18 +295,15 @@ bool IOHandlerManager::Pulse() {
 
 #ifndef HAS_KQUEUE_TIMERS
 
-bool IOHandlerManager::ProcessTimer(TimerEvent &event) {
+void IOHandlerManager::ProcessTimer(TimerEvent &event) {
 	IOHandlerManagerToken *pToken =
 			(IOHandlerManagerToken *) event.pUserData;
 	if (pToken->validPayload) {
 		if (!((IOHandler *) pToken->pPayload)->OnEvent(_dummy)) {
 			EnqueueForDelete((IOHandler *) pToken->pPayload);
-			return false;
 		}
-		return true;
 	} else {
 		FATAL("Invalid token");
-		return false;
 	}
 }
 #endif /* HAS_KQUEUE_TIMERS */

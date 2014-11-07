@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -23,7 +23,6 @@
 #define	_IOHANDLERMANAGER_H
 
 #include "common.h"
-#include "netio/fdstats.h"
 
 class IOHandler;
 
@@ -39,12 +38,10 @@ class DLLEXP IOHandlerManager {
 	static TimersManager *_pTimersManager;
 	static map<int32_t, map<uint32_t, uint8_t> > _fdState;
 	static bool _isShuttingDown;
-	static FdStats _fdStats;
 public:
 	static map<uint32_t, IOHandler *> & GetActiveHandlers();
 	static map<uint32_t, IOHandler *> & GetDeadHandlers();
 
-	static FdStats &GetStats(bool updateSpeeds);
 	/*!
 		@brief Initializes the handler manager.
 	 */
@@ -81,18 +78,8 @@ public:
 	 */
 	static void UnRegisterIOHandler(IOHandler *pIOHandler);
 
-	static int CreateRawUDPSocket();
-	static void CloseRawUDPSocket(int socket);
-
-#ifdef GLOBALLY_ACCOUNT_BYTES
-	static void AddInBytesManaged(IOHandlerType type, uint64_t bytes);
-	static void AddOutBytesManaged(IOHandlerType type, uint64_t bytes);
-	static void AddInBytesRawUdp(uint64_t bytes);
-	static void AddOutBytesRawUdp(uint64_t bytes);
-#endif /* GLOBALLY_ACCOUNT_BYTES */
-
 	/*!
-		@brief Enables the IO handler to read data.
+		@brief Enables the IO handler to read data. 
 		@discussion This assigns a FDSTATE_READ_ENABLED to the inbound file descriptor's state
 	 */
 	static bool EnableReadData(IOHandler *pIOHandler);
@@ -103,7 +90,7 @@ public:
 	static bool DisableReadData(IOHandler *pIOHandler);
 
 	/*!
-		@brief Enables the IO handler to write data.
+		@brief Enables the IO handler to write data. 
 		@discussion This assigns a FDSTATE_WRITE_ENABLED to the inbound file descriptor's state
 	 */
 	static bool EnableWriteData(IOHandler *pIOHandler);
@@ -126,17 +113,10 @@ public:
 
 	/*!
 		@brief  Adds a timer event to the TimersManager.
-		@param pIOHandler: The function uses this IO handler's id to set the value of the event's id.
+		@param pIOHandler: The function uses this IO handler's id to set the valu of the event's id.
 		@param seconds: The timer's period is set to seconds
 	 */
 	static bool EnableTimer(IOHandler *pIOHandler, uint32_t seconds);
-
-	/*!
-		@brief  Adds a timer event to the TimersManager.
-		@param pIOHandler: The function uses this IO handler's id to set the value of the event's id.
-		@param milliseconds: The timer's period is set to milliseconds
-	 */
-	static bool EnableHighGranularityTimer(IOHandler *pIOHandler, uint32_t milliseconds);
 
 	/*!
 		@brief  Removes the timer to the TimersManager
@@ -155,7 +135,7 @@ public:
 	static uint32_t DeleteDeadHandlers();
 private:
 	static bool UpdateFdSets(int32_t fd);
-	static bool ProcessTimer(TimerEvent &event);
+	static void ProcessTimer(TimerEvent &event);
 };
 
 #endif	/* _IOHANDLERMANAGER_H */

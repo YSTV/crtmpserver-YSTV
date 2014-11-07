@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -17,11 +17,12 @@
  *  along with crtmpserver.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+
 #include "commontestssuite.h"
 #include "varianttestssuite.h"
 #include "thelibtestssuite.h"
 
-int main(void) {
+int main(int argc, char **argv) {
 	TS_PRINT("Begin tests...\n");
 	EXECUTE_SUITE(CommonTestsSuite);
 	EXECUTE_SUITE(VariantTestsSuite);
@@ -29,3 +30,4 @@ int main(void) {
 	TS_PRINT("A total of %u tests completed successfuly\n", BaseTestsSuite::_testsCount);
 	return 0;
 }
+

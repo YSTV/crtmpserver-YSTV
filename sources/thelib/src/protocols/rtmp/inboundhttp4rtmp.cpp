@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -38,7 +38,7 @@ InboundHTTP4RTMP::~InboundHTTP4RTMP() {
 }
 
 bool InboundHTTP4RTMP::Initialize(Variant &parameters) {
-	GetCustomParameters() = parameters;
+	GetCustomParameters()=parameters;
 	return true;
 }
 
@@ -188,6 +188,7 @@ bool InboundHTTP4RTMP::ProcessOpen(vector<string> &parts) {
 }
 
 bool InboundHTTP4RTMP::ProcessIdle(vector<string> &parts) {
+
 	BaseProtocol *pProtocol = Bind(parts[2]);
 	if (pProtocol == NULL) {
 		FATAL("Unable to bind protocol");

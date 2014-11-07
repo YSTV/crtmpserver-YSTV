@@ -16,8 +16,6 @@
             <sourceRootList>
                 <sourceRootElem>../../../sources/applications/appselector/include</sourceRootElem>
                 <sourceRootElem>../../../sources/applications/appselector/src</sourceRootElem>
-                <sourceRootElem>../../../../sources/applications/appselector/include</sourceRootElem>
-                <sourceRootElem>../../../../sources/applications/appselector/src</sourceRootElem>
             </sourceRootList>
             <confList>
                 <confElem>

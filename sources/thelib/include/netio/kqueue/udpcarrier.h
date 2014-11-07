@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -34,7 +34,6 @@ private:
 	uint64_t _rx;
 	uint64_t _tx;
 	Variant _parameters;
-	int32_t _ioAmount;
 private:
 	UDPCarrier(int32_t fd);
 public:
@@ -48,17 +47,17 @@ public:
 	Variant &GetParameters();
 	void SetParameters(Variant parameters);
 	bool StartAccept();
-	bool EnableWriteEvents();
 
 	string GetFarEndpointAddress();
 	uint16_t GetFarEndpointPort();
 	string GetNearEndpointAddress();
 	uint16_t GetNearEndpointPort();
 
-	static UDPCarrier* Create(string bindIp, uint16_t bindPort, uint16_t ttl,
-			uint16_t tos, string ssmIp);
 	static UDPCarrier* Create(string bindIp, uint16_t bindPort,
-			BaseProtocol *pProtocol, uint16_t ttl, uint16_t tos, string ssmIp);
+			uint16_t ttl = 256, uint16_t tos = 256);
+	static UDPCarrier* Create(string bindIp, uint16_t bindPort,
+			BaseProtocol *pProtocol, uint16_t ttl = 256,
+			uint16_t tos = 256);
 private:
 	bool Setup(Variant &settings);
 	bool GetEndpointsInfo();

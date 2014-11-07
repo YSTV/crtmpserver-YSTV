@@ -2,7 +2,7 @@ Description: disable tests and -Werror flag
 
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -146,7 +146,7 @@
+@@ -123,7 +123,7 @@
  #ADD_DEFINITIONS(-DUSE_MEM_POOL)
  #ADD_DEFINITIONS(-DDEBUG_MEM_POOL)
  
@@ -11,9 +11,11 @@ Description: disable tests and -Werror flag
  
  #add 64 bit support for 32 but platforms
  ADD_DEFINITIONS(-D__USE_FILE_OFFSET64)
-@@ -225,4 +225,4 @@
- ADD_SUBDIRECTORY(thelib thelib)
+@@ -193,6 +193,6 @@
  ADD_SUBDIRECTORY(applications applications)
  ADD_SUBDIRECTORY(crtmpserver crtmpserver)
+ #ADD_SUBDIRECTORY(vmtests vmtests)
 -ADD_SUBDIRECTORY(tests)
 +#ADD_SUBDIRECTORY(tests)
+ #ADD_SUBDIRECTORY(androidapplestreaming androidapplestreaming)
+ 

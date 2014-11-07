@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -20,9 +20,6 @@
 #ifdef NET_EPOLL
 #include "netio/epoll/iohandlermanager.h"
 #include "netio/epoll/iohandler.h"
-#ifdef HAS_EPOLL_TIMERS
-#include <sys/timerfd.h>
-#endif /* HAS_EPOLL_TIMERS */
 
 int32_t IOHandlerManager::_eq = 0;
 map<uint32_t, IOHandler *> IOHandlerManager::_activeIOHandlers;
@@ -32,12 +29,7 @@ vector<IOHandlerManagerToken *> IOHandlerManager::_tokensVector1;
 vector<IOHandlerManagerToken *> IOHandlerManager::_tokensVector2;
 vector<IOHandlerManagerToken *> *IOHandlerManager::_pAvailableTokens;
 vector<IOHandlerManagerToken *> *IOHandlerManager::_pRecycledTokens;
-int32_t IOHandlerManager::_nextWaitPeriod = 1000;
-#ifndef HAS_EPOLL_TIMERS
 TimersManager *IOHandlerManager::_pTimersManager = NULL;
-#endif /* HAS_EPOLL_TIMERS */
-
-FdStats IOHandlerManager::_fdStats;
 struct epoll_event IOHandlerManager::_dummy = {0,
 	{0}};
 
@@ -49,28 +41,17 @@ map<uint32_t, IOHandler *> & IOHandlerManager::GetDeadHandlers() {
 	return _deadIOHandlers;
 }
 
-FdStats &IOHandlerManager::GetStats(bool updateSpeeds) {
-#ifdef GLOBALLY_ACCOUNT_BYTES
-	if (updateSpeeds)
-		_fdStats.UpdateSpeeds();
-#endif /* GLOBALLY_ACCOUNT_BYTES */
-	return _fdStats;
-}
-
 void IOHandlerManager::Initialize() {
-	_fdStats.Reset();
 	_eq = 0;
 	_pAvailableTokens = &_tokensVector1;
 	_pRecycledTokens = &_tokensVector2;
-#ifndef HAS_EPOLL_TIMERS
 	_pTimersManager = new TimersManager(ProcessTimer);
-#endif /* HAS_EPOLL_TIMERS */
 	memset(&_dummy, 0, sizeof (_dummy));
 }
 
 void IOHandlerManager::Start() {
 	_eq = epoll_create(EPOLL_QUERY_SIZE);
-	o_assert(_eq > 0);
+	assert(_eq > 0);
 }
 
 void IOHandlerManager::SignalShutdown() {
@@ -97,13 +78,13 @@ void IOHandlerManager::Shutdown() {
 		delete _tokensVector2[i];
 	_tokensVector2.clear();
 	_pRecycledTokens = &_tokensVector2;
-#ifndef HAS_EPOLL_TIMERS
+
 	delete _pTimersManager;
 	_pTimersManager = NULL;
-#endif /* HAS_EPOLL_TIMERS */
+
 
 	if (_activeIOHandlers.size() != 0 || _deadIOHandlers.size() != 0) {
-		FATAL("Incomplete shutdown!");
+		FATAL("Incomplete shutdown!!!");
 	}
 
 }
@@ -115,14 +96,12 @@ void IOHandlerManager::RegisterIOHandler(IOHandler* pIOHandler) {
 	SetupToken(pIOHandler);
 	size_t before = _activeIOHandlers.size();
 	_activeIOHandlers[pIOHandler->GetId()] = pIOHandler;
-	_fdStats.RegisterManaged(pIOHandler->GetType());
 	DEBUG("Handlers count changed: %"PRIz"u->%"PRIz"u %s", before, before + 1,
 			STR(IOHandler::IOHTToString(pIOHandler->GetType())));
 }
 
 void IOHandlerManager::UnRegisterIOHandler(IOHandler *pIOHandler) {
 	if (MAP_HAS1(_activeIOHandlers, pIOHandler->GetId())) {
-		_fdStats.UnRegisterManaged(pIOHandler->GetType());
 		FreeToken(pIOHandler);
 		size_t before = _activeIOHandlers.size();
 		_activeIOHandlers.erase(pIOHandler->GetId());
@@ -131,51 +110,13 @@ void IOHandlerManager::UnRegisterIOHandler(IOHandler *pIOHandler) {
 	}
 }
 
-int IOHandlerManager::CreateRawUDPSocket() {
-	int result = socket(AF_INET, SOCK_DGRAM, 0);
-	if ((result >= 0)&&(setFdCloseOnExec(result))) {
-		_fdStats.RegisterRawUdp();
-	} else {
-		int err = errno;
-		FATAL("Unable to create raw udp socket. Error code was: (%d) %s",
-				err, strerror(err));
-	}
-	return result;
-}
-
-void IOHandlerManager::CloseRawUDPSocket(int socket) {
-	if (socket > 0) {
-		_fdStats.UnRegisterRawUdp();
-	}
-	CLOSE_SOCKET(socket);
-}
-
-#ifdef GLOBALLY_ACCOUNT_BYTES
-
-void IOHandlerManager::AddInBytesManaged(IOHandlerType type, uint64_t bytes) {
-	_fdStats.AddInBytesManaged(type, bytes);
-}
-
-void IOHandlerManager::AddOutBytesManaged(IOHandlerType type, uint64_t bytes) {
-	_fdStats.AddOutBytesManaged(type, bytes);
-}
-
-void IOHandlerManager::AddInBytesRawUdp(uint64_t bytes) {
-	_fdStats.AddInBytesRawUdp(bytes);
-}
-
-void IOHandlerManager::AddOutBytesRawUdp(uint64_t bytes) {
-	_fdStats.AddOutBytesRawUdp(bytes);
-}
-#endif /* GLOBALLY_ACCOUNT_BYTES */
-
 bool IOHandlerManager::EnableReadData(IOHandler *pIOHandler) {
 	struct epoll_event evt = {0,
 		{0}};
 	evt.events = EPOLLIN;
 	evt.data.ptr = pIOHandler->GetIOHandlerManagerToken();
 	if (epoll_ctl(_eq, EPOLL_CTL_ADD, pIOHandler->GetInboundFd(), &evt) != 0) {
-		int err = errno;
+		int32_t err = errno;
 		FATAL("Unable to enable read data: (%d) %s", err, strerror(err));
 		return false;
 	}
@@ -189,7 +130,7 @@ bool IOHandlerManager::DisableReadData(IOHandler *pIOHandler, bool ignoreError) 
 	evt.data.ptr = pIOHandler->GetIOHandlerManagerToken();
 	if (epoll_ctl(_eq, EPOLL_CTL_DEL, pIOHandler->GetInboundFd(), &evt) != 0) {
 		if (!ignoreError) {
-			int err = errno;
+			int32_t err = errno;
 			FATAL("Unable to disable read data: (%d) %s", err, strerror(err));
 			return false;
 		}
@@ -203,18 +144,17 @@ bool IOHandlerManager::EnableWriteData(IOHandler *pIOHandler) {
 	evt.events = EPOLLIN | EPOLLOUT;
 	evt.data.ptr = pIOHandler->GetIOHandlerManagerToken();
 
-	if (epoll_ctl(_eq, EPOLL_CTL_MOD, pIOHandler->GetOutboundFd(), &evt) != 0) {
-		int err = errno;
-		if (err == ENOENT) {
-			if (epoll_ctl(_eq, EPOLL_CTL_ADD, pIOHandler->GetOutboundFd(), &evt) != 0) {
-				err = errno;
-				FATAL("Unable to enable read data: (%d) %s", err, strerror(err));
-				return false;
-			}
-		} else {
-			FATAL("Unable to enable read data: (%d) %s", err, strerror(err));
-			return false;
-		}
+	//TODO: Solve this ugly hack
+	int32_t operation;
+	if (pIOHandler->GetType() == IOHT_TCP_CONNECTOR)
+		operation = EPOLL_CTL_ADD;
+	else
+		operation = EPOLL_CTL_MOD;
+
+	if (epoll_ctl(_eq, operation, pIOHandler->GetOutboundFd(), &evt) != 0) {
+		int32_t err = errno;
+		FATAL("Unable to enable read data: (%d) %s", err, strerror(err));
+		return false;
 	}
 
 	return true;
@@ -227,7 +167,7 @@ bool IOHandlerManager::DisableWriteData(IOHandler *pIOHandler, bool ignoreError)
 	evt.data.ptr = pIOHandler->GetIOHandlerManagerToken();
 	if (epoll_ctl(_eq, EPOLL_CTL_MOD, pIOHandler->GetOutboundFd(), &evt) != 0) {
 		if (!ignoreError) {
-			int err = errno;
+			int32_t err = errno;
 			FATAL("Unable to disable write data: (%d) %s", err, strerror(err));
 			return false;
 		}
@@ -241,9 +181,7 @@ bool IOHandlerManager::EnableAcceptConnections(IOHandler *pIOHandler) {
 	evt.events = EPOLLIN;
 	evt.data.ptr = pIOHandler->GetIOHandlerManagerToken();
 	if (epoll_ctl(_eq, EPOLL_CTL_ADD, pIOHandler->GetInboundFd(), &evt) != 0) {
-		int err = errno;
-		if (err == EEXIST)
-			return true;
+		int32_t err = errno;
 		FATAL("Unable to enable accept connections: (%d) %s", err, strerror(err));
 		return false;
 	}
@@ -257,7 +195,7 @@ bool IOHandlerManager::DisableAcceptConnections(IOHandler *pIOHandler, bool igno
 	evt.data.ptr = pIOHandler->GetIOHandlerManagerToken();
 	if (epoll_ctl(_eq, EPOLL_CTL_DEL, pIOHandler->GetInboundFd(), &evt) != 0) {
 		if (!ignoreError) {
-			int err = errno;
+			int32_t err = errno;
 			FATAL("Unable to disable accept connections: (%d) %s", err, strerror(err));
 			return false;
 		}
@@ -266,109 +204,17 @@ bool IOHandlerManager::DisableAcceptConnections(IOHandler *pIOHandler, bool igno
 }
 
 bool IOHandlerManager::EnableTimer(IOHandler *pIOHandler, uint32_t seconds) {
-#ifdef HAS_EPOLL_TIMERS
-	itimerspec tmp;
-	itimerspec dummy;
-	memset(&tmp, 0, sizeof (tmp));
-	tmp.it_interval.tv_nsec = 0;
-	tmp.it_interval.tv_sec = seconds;
-	tmp.it_value.tv_nsec = 0;
-	tmp.it_value.tv_sec = seconds;
-	if (timerfd_settime(pIOHandler->GetInboundFd(), 0, &tmp, &dummy) != 0) {
-		int err = errno;
-		FATAL("timerfd_settime failed with error (%d) %s", err, strerror(err));
-		return false;
-	}
-	struct epoll_event evt = {0,
-		{0}};
-	evt.events = EPOLLIN;
-	evt.data.ptr = pIOHandler->GetIOHandlerManagerToken();
-	if (epoll_ctl(_eq, EPOLL_CTL_ADD, pIOHandler->GetInboundFd(), &evt) != 0) {
-		int err = errno;
-		FATAL("Unable to enable read data: (%d) %s", err, strerror(err));
-		return false;
-	}
-	return true;
-#else /* HAS_EPOLL_TIMERS */
-	TimerEvent event = {0, 0, 0, 0};
+	TimerEvent event = {0, 0, 0};
 	event.id = pIOHandler->GetId();
-	event.period = seconds * 1000;
+	event.period = seconds;
 	event.pUserData = pIOHandler->GetIOHandlerManagerToken();
 	_pTimersManager->AddTimer(event);
 	return true;
-#endif /* HAS_EPOLL_TIMERS */
-}
-
-#ifdef HAS_EPOLL_TIMERS
-
-string dumpTimerStruct(itimerspec &ts) {
-	return format("it_interval\n\ttv_sec: %"PRIz"u\n\ttv_nsec: %ld\nit_value\n\ttv_sec: %"PRIz"u\n\ttv_nsec: %ld",
-			ts.it_interval.tv_sec,
-			ts.it_interval.tv_nsec,
-			ts.it_value.tv_sec,
-			ts.it_value.tv_nsec);
-}
-#endif /* HAS_EPOLL_TIMERS */
-
-bool IOHandlerManager::EnableHighGranularityTimer(IOHandler *pIOHandler, uint32_t milliseconds) {
-#ifdef HAS_EPOLL_TIMERS
-	itimerspec tmp;
-	itimerspec dummy;
-	memset(&tmp, 0, sizeof (tmp));
-	tmp.it_interval.tv_nsec = (milliseconds % 1000)*1000000;
-	tmp.it_interval.tv_sec = milliseconds / 1000;
-	tmp.it_value.tv_nsec = (milliseconds % 1000)*1000000;
-	tmp.it_value.tv_sec = milliseconds / 1000;
-	//	ASSERT("milliseconds: %"PRIu32"\n%s",
-	//			milliseconds,
-	//			STR(dumpTimerStruct(tmp)));
-	if (timerfd_settime(pIOHandler->GetInboundFd(), 0, &tmp, &dummy) != 0) {
-		int err = errno;
-		FATAL("timerfd_settime failed with error (%d) %s", err, strerror(err));
-		return false;
-	}
-	struct epoll_event evt = {0,
-		{0}};
-	evt.events = EPOLLIN;
-	evt.data.ptr = pIOHandler->GetIOHandlerManagerToken();
-	if (epoll_ctl(_eq, EPOLL_CTL_ADD, pIOHandler->GetInboundFd(), &evt) != 0) {
-		int err = errno;
-		FATAL("Unable to enable read data: (%d) %s", err, strerror(err));
-		return false;
-	}
-	return true;
-#else /* HAS_EPOLL_TIMERS */
-	TimerEvent event = {0, 0, 0, 0};
-	event.id = pIOHandler->GetId();
-	event.period = milliseconds;
-	event.pUserData = pIOHandler->GetIOHandlerManagerToken();
-	_pTimersManager->AddTimer(event);
-	return true;
-#endif /* HAS_EPOLL_TIMERS */
 }
 
 bool IOHandlerManager::DisableTimer(IOHandler *pIOHandler, bool ignoreError) {
-#ifdef HAS_EPOLL_TIMERS
-	itimerspec tmp;
-	itimerspec dummy;
-	memset(&tmp, 0, sizeof (tmp));
-	timerfd_settime(pIOHandler->GetInboundFd(), 0, &tmp, &dummy);
-	struct epoll_event evt = {0,
-		{0}};
-	evt.events = EPOLLIN;
-	evt.data.ptr = pIOHandler->GetIOHandlerManagerToken();
-	if (epoll_ctl(_eq, EPOLL_CTL_DEL, pIOHandler->GetInboundFd(), &evt) != 0) {
-		if (!ignoreError) {
-			int err = errno;
-			FATAL("Unable to disable read data: (%d) %s", err, strerror(err));
-			return false;
-		}
-	}
-	return true;
-#else /* HAS_EPOLL_TIMERS */
 	_pTimersManager->RemoveTimer(pIOHandler->GetId());
 	return true;
-#endif /* HAS_EPOLL_TIMERS */
 }
 
 void IOHandlerManager::EnqueueForDelete(IOHandler *pIOHandler) {
@@ -393,25 +239,13 @@ uint32_t IOHandlerManager::DeleteDeadHandlers() {
 
 bool IOHandlerManager::Pulse() {
 	int32_t eventsCount = 0;
-#ifdef HAS_EPOLL_TIMERS
-	if ((eventsCount = epoll_wait(_eq, _query, EPOLL_QUERY_SIZE, -1)) < 0) {
-		int err = errno;
-		if (err == EINTR)
-			return true;
-		FATAL("Unable to execute epoll_wait: (%d) %s", err, strerror(err));
-		return false;
-	}
-#else /* HAS_EPOLL_TIMERS */
-	if ((eventsCount = epoll_wait(_eq, _query, EPOLL_QUERY_SIZE, _nextWaitPeriod)) < 0) {
-		int err = errno;
-		if (err == EINTR)
-			return true;
+	if ((eventsCount = epoll_wait(_eq, _query, EPOLL_QUERY_SIZE, 1000)) < 0) {
+		int32_t err = errno;
 		FATAL("Unable to execute epoll_wait: (%d) %s", err, strerror(err));
 		return false;
 	}
 
-	_nextWaitPeriod = _pTimersManager->TimeElapsed();
-#endif /* HAS_EPOLL_TIMERS */
+	_pTimersManager->TimeElapsed(time(NULL));
 
 	for (int32_t i = 0; i < eventsCount; i++) {
 		//1. Get the token
@@ -474,24 +308,19 @@ void IOHandlerManager::FreeToken(IOHandler *pIOHandler) {
 	ADD_VECTOR_END((*_pRecycledTokens), pToken);
 }
 
-#ifndef HAS_EPOLL_TIMERS
-
-bool IOHandlerManager::ProcessTimer(TimerEvent &event) {
+void IOHandlerManager::ProcessTimer(TimerEvent &event) {
 	IOHandlerManagerToken *pToken =
 			(IOHandlerManagerToken *) event.pUserData;
 	_dummy.data.ptr = &event;
 	if (pToken->validPayload) {
 		if (!((IOHandler *) pToken->pPayload)->OnEvent(_dummy)) {
 			EnqueueForDelete((IOHandler *) pToken->pPayload);
-			return false;
 		}
-		return true;
 	} else {
 		FATAL("Invalid token");
-		return false;
 	}
 }
-#endif /* HAS_EPOLL_TIMERS */
+
 #endif /* NET_EPOLL */
 
 

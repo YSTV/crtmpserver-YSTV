@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -21,7 +21,10 @@
 #ifndef _LUAUTILS_H
 #define	_LUAUTILS_H
 
-struct lua_State;
+extern "C" {
+#include <lualib.h>
+#include <lauxlib.h>
+}
 #include "platform/platform.h"
 #include "utils/misc/variant.h"
 

@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -30,14 +30,9 @@
 #include "protocols/liveflv/innetliveflvstream.h"
 #include "protocols/rtmp/streaming/outnetrtmp4rtmpstream.h"
 #include "protocols/rtmp/streaming/outnetrtmp4tsstream.h"
-#include "application/baseclientapplication.h"
-#include "streaming/codectypes.h"
 
-//#define TRACK_HEADER(header,processed) do{if(processed==0) FINEST("%s",STR(header));}while(0)
+//#define TRACK_HEADER(header,processed) if(processed==0) FINEST("%s",STR(header));
 #define TRACK_HEADER(header,processed)
-
-//#define TRACK_PAYLOAD(processedLength,dataLength,pData) do {if (processedLength == 0) {uint32_t ___temp = dataLength > 32 ? 32 : dataLength; FINEST("%s", STR(hex(pData, ___temp)));}} while (0)
-#define TRACK_PAYLOAD(processedLength,dataLength,pData)
 
 //#define TRACK_MESSAGE(...) FINEST(__VA_ARGS__)
 #define TRACK_MESSAGE(...)
@@ -48,10 +43,10 @@
 //the number represents the percent of frames that we will drop (0-100)
 //#define SIMULATE_DROPPING_FRAMES 40
 
-BaseOutNetRTMPStream::BaseOutNetRTMPStream(BaseProtocol *pProtocol, uint64_t type,
-		string name, uint32_t rtmpStreamId,
+BaseOutNetRTMPStream::BaseOutNetRTMPStream(BaseProtocol *pProtocol,
+		StreamsManager *pStreamsManager, uint64_t type, string name, uint32_t rtmpStreamId,
 		uint32_t chunkSize)
-: BaseOutNetStream(pProtocol, type, name) {
+: BaseOutNetStream(pProtocol, pStreamsManager, type, name) {
 	if (!TAG_KIND_OF(type, ST_OUT_NET_RTMP)) {
 		ASSERT("Incorrect stream type. Wanted a stream type in class %s and got %s",
 				STR(tagToString(ST_OUT_NET_RTMP)), STR(tagToString(type)));
@@ -67,14 +62,13 @@ BaseOutNetRTMPStream::BaseOutNetRTMPStream(BaseProtocol *pProtocol, uint64_t typ
 	_canDropFrames = true;
 	_audioCurrentFrameDropped = false;
 	_videoCurrentFrameDropped = false;
+	_maxBufferSize = 65536 * 2;
 	_attachedStreamType = 0;
 	_clientId = format("%d_%d_%"PRIz"u", _pProtocol->GetId(), _rtmpStreamId, (size_t)this);
 
 	_paused = false;
 
 	_sendOnStatusPlayMessages = true;
-	_metaFileSize = 0;
-	_metaFileDuration = 0;
 
 	_audioPacketsCount = 0;
 	_audioDroppedPacketsCount = 0;
@@ -84,24 +78,6 @@ BaseOutNetRTMPStream::BaseOutNetRTMPStream(BaseProtocol *pProtocol, uint64_t typ
 	_videoDroppedPacketsCount = 0;
 	_videoBytesCount = 0;
 	_videoDroppedBytesCount = 0;
-
-	if ((pProtocol != NULL)
-			&& (pProtocol->GetApplication() != NULL)
-			&& (pProtocol->GetApplication()->GetConfiguration().HasKeyChain(_V_NUMERIC, false, 1, "maxRtmpOutBuffer"))) {
-		_maxBufferSize = (uint32_t) pProtocol->GetApplication()->GetConfiguration().GetValue("maxRtmpOutBuffer", false);
-	} else {
-		_maxBufferSize = 65536 * 2;
-	}
-
-	_absoluteTimestamps = false;
-	if (pProtocol != NULL) {
-		Variant &params = pProtocol->GetCustomParameters();
-		if (params.HasKeyChain(V_BOOL, false, 3, "customParameters", "localStreamConfig", "rtmpAbsoluteTimestamps")) {
-			_absoluteTimestamps = (bool)(params.GetValue("customParameters", false)
-					.GetValue("localStreamConfig", false)
-					.GetValue("rtmpAbsoluteTimestamps", false));
-		}
-	}
 
 	InternalReset();
 }
@@ -115,23 +91,21 @@ BaseOutNetRTMPStream *BaseOutNetRTMPStream::GetInstance(BaseProtocol *pProtocol,
 	if (TAG_KIND_OF(inStreamType, ST_IN_NET_RTMP)
 			|| TAG_KIND_OF(inStreamType, ST_IN_NET_LIVEFLV)
 			|| TAG_KIND_OF(inStreamType, ST_IN_FILE_RTMP)
+			|| TAG_KIND_OF(inStreamType, ST_IN_NET_MP3)
 			) {
-		pResult = new OutNetRTMP4RTMPStream(pProtocol, name, rtmpStreamId, chunkSize);
+		pResult = new OutNetRTMP4RTMPStream(pProtocol, pStreamsManager, name,
+				rtmpStreamId, chunkSize);
 	} else if (TAG_KIND_OF(inStreamType, ST_IN_NET_TS)
-			|| TAG_KIND_OF(inStreamType, ST_IN_NET_RTP)) {
-		pResult = new OutNetRTMP4TSStream(pProtocol, name, rtmpStreamId, chunkSize);
+			|| TAG_KIND_OF(inStreamType, ST_IN_NET_RTP)
+			|| TAG_KIND_OF(inStreamType, ST_IN_NET_AAC)) {
+		pResult = new OutNetRTMP4TSStream(pProtocol, pStreamsManager, name,
+				rtmpStreamId, chunkSize);
 	} else {
 		FATAL("Can't instantiate a network rtmp outbound stream for type %s",
 				STR(tagToString(inStreamType)));
 	}
 
 	if (pResult != NULL) {
-		if (!pResult->SetStreamsManager(pStreamsManager)) {
-			FATAL("Unable to set the streams manager");
-			delete pResult;
-			pResult = NULL;
-			return NULL;
-		}
 		if ((pResult->_pChannelAudio == NULL)
 				|| (pResult->_pChannelVideo == NULL)
 				|| (pResult->_pChannelCommands == NULL)) {
@@ -195,6 +169,117 @@ void BaseOutNetRTMPStream::GetStats(Variant &info, uint32_t namespaceId) {
 	info["video"]["droppedBytesCount"] = _videoDroppedBytesCount;
 }
 
+bool BaseOutNetRTMPStream::FeedData(uint8_t *pData, uint32_t dataLength,
+		uint32_t processedLength, uint32_t totalLength,
+		double absoluteTimestamp, bool isAudio) {
+	if (_paused)
+		return true;
+	if (isAudio) {
+		if (processedLength == 0)
+			_audioPacketsCount++;
+		_audioBytesCount += dataLength;
+		if (_isFirstAudioFrame) {
+			_audioCurrentFrameDropped = false;
+			if (dataLength == 0)
+				return true;
+
+			//first frame
+			if (processedLength != 0) {
+				//middle of packet
+				_pRTMPProtocol->EnqueueForOutbound();
+				return true;
+			}
+
+			if ((*_pDeltaAudioTime) < 0)
+				(*_pDeltaAudioTime) = absoluteTimestamp;
+			if ((*_pDeltaAudioTime) > absoluteTimestamp) {
+				//FINEST("A: WAIT: D: %.2f", (*_pDeltaAudioTime) - absoluteTimestamp);
+				_pRTMPProtocol->EnqueueForOutbound();
+				return true;
+			}
+
+			H_IA(_audioHeader) = true;
+			H_TS(_audioHeader) = (uint32_t) (absoluteTimestamp - (*_pDeltaAudioTime) + _seekTime);
+			if ((pData[0] >> 4) == 10
+					&& (pData[1] == 0)) {
+				//AAC codec setup. Keep _isFirstAudioFrame == true;
+				_isFirstAudioFrame = true;
+			} else {
+				//not AAC codec setup
+				_isFirstAudioFrame = false;
+			}
+		} else {
+			ALLOW_EXECUTION(processedLength, dataLength, isAudio);
+			H_IA(_audioHeader) = false;
+			if (processedLength == 0)
+				H_TS(_audioHeader) = (uint32_t) ((absoluteTimestamp - (*_pDeltaAudioTime) + _seekTime)
+					- _pChannelAudio->lastOutAbsTs);
+		}
+
+		H_ML(_audioHeader) = totalLength;
+
+		return ChunkAndSend(pData, dataLength, _audioBucket,
+				_audioHeader, *_pChannelAudio);
+	} else {
+		if (processedLength == 0)
+			_videoPacketsCount++;
+		_videoBytesCount += dataLength;
+		if (_isFirstVideoFrame) {
+			_videoCurrentFrameDropped = false;
+			if (dataLength == 0)
+				return true;
+
+			//first frame
+			if (processedLength != 0) {
+				//middle of packet
+				_pRTMPProtocol->EnqueueForOutbound();
+				return true;
+			}
+
+			if (dataLength == 0) {
+				_pRTMPProtocol->EnqueueForOutbound();
+				return true;
+			}
+
+			if ((pData[0] >> 4) != 1) {
+				_pRTMPProtocol->EnqueueForOutbound();
+				return true;
+			}
+
+			if ((*_pDeltaVideoTime) < 0)
+				(*_pDeltaVideoTime) = absoluteTimestamp;
+			if ((*_pDeltaVideoTime) > absoluteTimestamp) {
+				//FINEST("V: WAIT: D: %.2f", (*_pDeltaVideoTime) - absoluteTimestamp);
+				_pRTMPProtocol->EnqueueForOutbound();
+				return true;
+			}
+
+			H_IA(_videoHeader) = true;
+			H_TS(_videoHeader) = (uint32_t) (absoluteTimestamp - (*_pDeltaVideoTime) + _seekTime);
+
+			if ((pData[0] == 0x17) //AVC keyframe
+					&& (pData[1] == 0)) { //codec setup
+				// h264 codec setup. Keep _isFirstVideoFrame == true
+				_isFirstVideoFrame = true;
+			} else {
+				//not h264 codec setup
+				_isFirstVideoFrame = false;
+			}
+		} else {
+			ALLOW_EXECUTION(processedLength, dataLength, isAudio);
+			H_IA(_videoHeader) = false;
+			if (processedLength == 0)
+				H_TS(_videoHeader) = (uint32_t) ((absoluteTimestamp - (*_pDeltaVideoTime) + _seekTime)
+					- _pChannelVideo->lastOutAbsTs);
+		}
+
+		H_ML(_videoHeader) = totalLength;
+
+		return ChunkAndSend(pData, dataLength, _videoBucket,
+				_videoHeader, *_pChannelVideo);
+	}
+}
+
 bool BaseOutNetRTMPStream::SendStreamMessage(Variant &message) {
 	//1. Set the channel id
 	VH_CI(message) = (uint32_t) 3;
@@ -219,14 +304,21 @@ void BaseOutNetRTMPStream::SignalAttachedToInStream() {
 	//2. Mirror the feeder chunk size
 	if (TAG_KIND_OF(_attachedStreamType, ST_IN_NET_RTMP)) {
 		_feederChunkSize = ((InNetRTMPStream *) _pInStream)->GetChunkSize();
-	} else if (TAG_KIND_OF(_attachedStreamType, ST_IN_FILE)) {
+	} else if (TAG_KIND_OF(_attachedStreamType, ST_IN_FILE_RTMP)) {
 		_feederChunkSize = ((InFileRTMPStream *) _pInStream)->GetChunkSize();
 	} else {
 		_feederChunkSize = 0xffffffff;
 	}
 
-	//4. Store the file metadata
-	GetMetadata();
+	//3. Fix the time base
+	FixTimeBase();
+
+
+	//4. Store the metadata
+	if (TAG_KIND_OF(_attachedStreamType, ST_IN_FILE_RTMP)) {
+		InFileRTMPStream *pInFileRTMPStream = (InFileRTMPStream *) _pInStream;
+		_completeMetadata = pInFileRTMPStream->GetCompleteMetadata();
+	}
 
 	Variant message;
 
@@ -254,7 +346,7 @@ void BaseOutNetRTMPStream::SignalAttachedToInStream() {
 	}
 
 	//6. Stream is recorded
-	if (TAG_KIND_OF(_attachedStreamType, ST_IN_FILE)) {
+	if (TAG_KIND_OF(_attachedStreamType, ST_IN_FILE_RTMP)) {
 		message = StreamMessageFactory::GetUserControlStreamIsRecorded(_rtmpStreamId);
 		TRACK_MESSAGE("Message:\n%s", STR(message.ToString()));
 		if (!_pRTMPProtocol->SendMessage(message)) {
@@ -305,13 +397,12 @@ void BaseOutNetRTMPStream::SignalAttachedToInStream() {
 			_pRTMPProtocol->EnqueueForDelete();
 			return;
 		}
+	} else {
+		FINEST("Skip sending NetStream.Play.Reset, NetStream.Play.Start and notify |RtmpSampleAcces");
 	}
-	//	else {
-	//		FINEST("Skip sending NetStream.Play.Reset, NetStream.Play.Start and notify |RtmpSampleAcces");
-	//	}
 
 	//11. notify onStatus code="NetStream.Data.Start"
-	if (TAG_KIND_OF(_attachedStreamType, ST_IN_FILE)) {
+	if (TAG_KIND_OF(_attachedStreamType, ST_IN_FILE_RTMP)) {
 		message = StreamMessageFactory::GetNotifyOnStatusDataStart(
 				_pChannelAudio->id, _rtmpStreamId, 0, true);
 		TRACK_MESSAGE("Message:\n%s", STR(message.ToString()));
@@ -323,21 +414,57 @@ void BaseOutNetRTMPStream::SignalAttachedToInStream() {
 	}
 
 	//12. notify onMetaData
-	if (!SendOnMetadata()) {
-		FATAL("Unable to send onMetadata message");
-		_pRTMPProtocol->EnqueueForDelete();
-		return;
+	if (TAG_KIND_OF(_attachedStreamType, ST_IN_FILE_RTMP)) {
+		if ((VariantType) _completeMetadata[META_RTMP_META] == V_MAP) {
+			message = StreamMessageFactory::GetNotifyOnMetaData(_pChannelAudio->id,
+					_rtmpStreamId, 0, true, _completeMetadata[META_RTMP_META]);
+			TRACK_MESSAGE("Message:\n%s", STR(message.ToString()));
+			if (!_pRTMPProtocol->SendMessage(message)) {
+				FATAL("Unable to send message");
+				_pRTMPProtocol->EnqueueForDelete();
+				return;
+			}
+		}
+	} else {
+		StreamCapabilities *pCapabilities = GetCapabilities();
+		if (pCapabilities != NULL) {
+			if (pCapabilities->videoCodecId == CODEC_VIDEO_AVC) {
+				Variant meta;
+				meta.IsArray(false);
+				if ((pCapabilities->avc._widthOverride != 0)
+						&& (pCapabilities->avc._heightOverride != 0)) {
+					meta["width"] = pCapabilities->avc._widthOverride;
+					meta["height"] = pCapabilities->avc._heightOverride;
+				} else if ((pCapabilities->avc._width != 0)
+						&& (pCapabilities->avc._height != 0)) {
+					meta["width"] = pCapabilities->avc._width;
+					meta["height"] = pCapabilities->avc._height;
+				}
+				if (pCapabilities->bandwidthHint != 0) {
+					meta["bandwidth"] = (uint32_t) pCapabilities->bandwidthHint;
+				}
+				message = StreamMessageFactory::GetNotifyOnMetaData(_pChannelAudio->id,
+						_rtmpStreamId, 0, false, meta);
+				TRACK_MESSAGE("Message:\n%s", STR(message.ToString()));
+				if (!_pRTMPProtocol->SendMessage(message)) {
+					FATAL("Unable to send message");
+					_pRTMPProtocol->EnqueueForDelete();
+					return;
+				}
+			}
+		}
 	}
 }
 
 void BaseOutNetRTMPStream::SignalDetachedFromInStream() {
 	//1. send the required messages depending on the feeder
 	Variant message;
-	if (TAG_KIND_OF(_attachedStreamType, ST_IN_FILE)) {
+	if (TAG_KIND_OF(_attachedStreamType, ST_IN_FILE_RTMP)) {
 		//2. notify onPlayStatus code="NetStream.Play.Complete", bytes=xxx, duration=yyy, level status
 		message = StreamMessageFactory::GetNotifyOnPlayStatusPlayComplete(
 				_pChannelAudio->id, _rtmpStreamId, 0, false,
-				(double) _metaFileSize, _metaFileDuration);
+				_completeMetadata[META_FILE_SIZE],
+				(double) _completeMetadata[META_FILE_DURATION] / 1000);
 		TRACK_MESSAGE("Message:\n%s", STR(message.ToString()));
 		if (!_pRTMPProtocol->SendMessage(message)) {
 			FATAL("Unable to send message");
@@ -381,8 +508,9 @@ void BaseOutNetRTMPStream::SignalDetachedFromInStream() {
 	InternalReset();
 }
 
-bool BaseOutNetRTMPStream::SignalPlay(double &dts, double &length) {
+bool BaseOutNetRTMPStream::SignalPlay(double &absoluteTimestamp, double &length) {
 	_paused = false;
+
 	return true;
 }
 
@@ -416,7 +544,8 @@ bool BaseOutNetRTMPStream::SignalResume() {
 	return true;
 }
 
-bool BaseOutNetRTMPStream::SignalSeek(double &dts) {
+bool BaseOutNetRTMPStream::SignalSeek(double &absoluteTimestamp) {
+
 	//1. Stream eof
 	Variant message = StreamMessageFactory::GetUserControlStreamEof(_rtmpStreamId);
 	TRACK_MESSAGE("Message:\n%s", STR(message.ToString()));
@@ -446,7 +575,7 @@ bool BaseOutNetRTMPStream::SignalSeek(double &dts) {
 
 	//4. NetStream.Seek.Notify
 	message = StreamMessageFactory::GetInvokeOnStatusStreamSeekNotify(
-			_pChannelAudio->id, _rtmpStreamId, dts, true, 0, "seeking...", GetName(),
+			_pChannelAudio->id, _rtmpStreamId, absoluteTimestamp, true, 0, "seeking...", GetName(),
 			_clientId);
 	TRACK_MESSAGE("Message:\n%s", STR(message.ToString()));
 	if (!_pRTMPProtocol->SendMessage(message)) {
@@ -486,16 +615,43 @@ bool BaseOutNetRTMPStream::SignalSeek(double &dts) {
 		return false;
 	}
 
-	//12. notify onMetaData
-	if (!SendOnMetadata()) {
-		FATAL("Unable to send onMetadata message");
-		_pRTMPProtocol->EnqueueForDelete();
-		return false;
+	//8. notify onMetaData
+	if ((VariantType) _completeMetadata[META_RTMP_META] == V_MAP) {
+		message = StreamMessageFactory::GetNotifyOnMetaData(_pChannelAudio->id,
+				_rtmpStreamId, 0, false, _completeMetadata[META_RTMP_META]);
+		TRACK_MESSAGE("Message:\n%s", STR(message.ToString()));
+		if (!_pRTMPProtocol->SendMessage(message)) {
+			FATAL("Unable to send message");
+			_pRTMPProtocol->EnqueueForDelete();
+			return false;
+		}
+	} else {
+		StreamCapabilities *pCapabilities = GetCapabilities();
+		if (pCapabilities != NULL) {
+			if (pCapabilities->videoCodecId == CODEC_VIDEO_AVC) {
+				if ((pCapabilities->avc._width != 0)
+						&& (pCapabilities->avc._height != 0)) {
+					Variant meta;
+					meta["width"] = pCapabilities->avc._width;
+					meta["height"] = pCapabilities->avc._height;
+					message = StreamMessageFactory::GetNotifyOnMetaData(_pChannelAudio->id,
+							_rtmpStreamId, 0, false, meta);
+					TRACK_MESSAGE("Message:\n%s", STR(message.ToString()));
+					if (!_pRTMPProtocol->SendMessage(message)) {
+						FATAL("Unable to send message");
+						_pRTMPProtocol->EnqueueForDelete();
+						return false;
+					}
+				}
+			}
+		}
 	}
 
 	InternalReset();
 
-	_seekTime = dts;
+	FixTimeBase();
+
+	_seekTime = absoluteTimestamp;
 
 	return true;
 }
@@ -508,7 +664,8 @@ void BaseOutNetRTMPStream::SignalStreamCompleted() {
 	//1. notify onPlayStatus code="NetStream.Play.Complete", bytes=xxx, duration=yyy, level status
 	Variant message = StreamMessageFactory::GetNotifyOnPlayStatusPlayComplete(
 			_pChannelAudio->id, _rtmpStreamId, 0, false,
-			(double) _metaFileSize, _metaFileDuration);
+			_completeMetadata[META_FILE_SIZE],
+			(double) _completeMetadata[META_FILE_DURATION] / 1000);
 	TRACK_MESSAGE("Message:\n%s", STR(message.ToString()));
 	if (!_pRTMPProtocol->SendMessage(message)) {
 		FATAL("Unable to send message");
@@ -537,184 +694,6 @@ void BaseOutNetRTMPStream::SignalStreamCompleted() {
 	}
 
 	InternalReset();
-}
-
-void BaseOutNetRTMPStream::SignalAudioStreamCapabilitiesChanged(
-		StreamCapabilities *pCapabilities, AudioCodecInfo *pOld,
-		AudioCodecInfo *pNew) {
-	if (pCapabilities == NULL)
-		return;
-	if (!FeedAudioCodecBytes(pCapabilities, 0, false)) {
-		FATAL("Unable to feed audio codec bytes");
-		_pRTMPProtocol->EnqueueForDelete();
-	}
-	if (!SendOnMetadata()) {
-		FATAL("Unable to send metadata");
-		_pRTMPProtocol->EnqueueForDelete();
-	}
-}
-
-void BaseOutNetRTMPStream::SignalVideoStreamCapabilitiesChanged(
-		StreamCapabilities *pCapabilities, VideoCodecInfo *pOld,
-		VideoCodecInfo *pNew) {
-	if (pCapabilities == NULL)
-		return;
-	if (!FeedVideoCodecBytes(pCapabilities, 0, false)) {
-		FATAL("Unable to feed video codec bytes");
-		_pRTMPProtocol->EnqueueForDelete();
-	}
-	if (!SendOnMetadata()) {
-		FATAL("Unable to send metadata");
-		_pRTMPProtocol->EnqueueForDelete();
-	}
-}
-
-bool BaseOutNetRTMPStream::InternalFeedData(uint8_t *pData, uint32_t dataLength,
-		uint32_t processedLength, uint32_t totalLength,
-		double dts, bool isAudio) {
-	if (_start < 0)
-		_start = dts;
-	dts -= _start;
-	if (_paused)
-		return true;
-	if (isAudio) {
-		if (processedLength == 0)
-			_audioPacketsCount++;
-		_audioBytesCount += dataLength;
-		if (_isFirstAudioFrame) {
-			_audioCurrentFrameDropped = false;
-			if (dataLength == 0)
-				return true;
-
-			//first frame
-			if (processedLength != 0) {
-				//middle of packet
-				_pRTMPProtocol->EnqueueForOutbound();
-				return true;
-			}
-
-			StreamCapabilities *pCapabilities = GetCapabilities();
-			if (pCapabilities == NULL) {
-				return true;
-			}
-
-			if (!FeedAudioCodecBytes(pCapabilities, dts + _seekTime, true)) {
-				FATAL("Unable to feed audio codec bytes");
-				return false;
-			}
-
-			_isFirstAudioFrame = false;
-
-			H_IA(_audioHeader) = true;
-			H_TS(_audioHeader) = (uint32_t) (dts + _seekTime);
-		} else {
-			ALLOW_EXECUTION(processedLength, dataLength, isAudio);
-			H_IA(_audioHeader) = _absoluteTimestamps;
-			if (processedLength == 0)
-				H_TS(_audioHeader) = (uint32_t) ((dts + _seekTime)
-					- _pChannelAudio->lastOutAbsTs);
-		}
-
-		H_ML(_audioHeader) = totalLength;
-
-		TRACK_PAYLOAD(processedLength, dataLength, pData);
-		return ChunkAndSend(pData, dataLength, _audioBucket,
-				_audioHeader, *_pChannelAudio);
-	} else {
-		if (processedLength == 0)
-			_videoPacketsCount++;
-		_videoBytesCount += dataLength;
-		if (_isFirstVideoFrame) {
-			_videoCurrentFrameDropped = false;
-			if (dataLength == 0)
-				return true;
-
-			//first frame
-			if (processedLength != 0) {
-				//middle of packet
-				_pRTMPProtocol->EnqueueForOutbound();
-				return true;
-			}
-
-			if (dataLength == 0) {
-				_pRTMPProtocol->EnqueueForOutbound();
-				return true;
-			}
-#ifndef WIN32
-			if ((pData[0] >> 4) != 1) {
-				_pRTMPProtocol->EnqueueForOutbound();
-				return true;
-			}
-#endif /* WIN32 */
-
-			StreamCapabilities *pCapabilities = GetCapabilities();
-			if (pCapabilities == NULL) {
-				return true;
-			}
-
-			if (!FeedVideoCodecBytes(pCapabilities, dts + _seekTime, true)) {
-				FATAL("Unable to feed video codec bytes");
-				return false;
-			}
-
-			_isFirstVideoFrame = false;
-
-			H_IA(_videoHeader) = true;
-			H_TS(_videoHeader) = (uint32_t) (dts + _seekTime);
-		} else {
-			ALLOW_EXECUTION(processedLength, dataLength, isAudio);
-			H_IA(_videoHeader) = _absoluteTimestamps;
-			if (processedLength == 0)
-				H_TS(_videoHeader) = (uint32_t) ((dts + _seekTime)
-					- _pChannelVideo->lastOutAbsTs);
-		}
-
-		H_ML(_videoHeader) = totalLength;
-
-		TRACK_PAYLOAD(processedLength, dataLength, pData);
-		return ChunkAndSend(pData, dataLength, _videoBucket,
-				_videoHeader, *_pChannelVideo);
-	}
-}
-
-bool BaseOutNetRTMPStream::FeedAudioCodecBytes(StreamCapabilities *pCapabilities,
-		double dts, bool isAbsolute) {
-	if (dts < 0)
-		dts = 0;
-	if ((pCapabilities == NULL) || (pCapabilities->GetAudioCodecType() != CODEC_AUDIO_AAC))
-		return true;
-	AudioCodecInfoAAC *pInfo = pCapabilities->GetAudioCodec<AudioCodecInfoAAC > ();
-	if (pInfo == NULL)
-		return true;
-	IOBuffer &buffer = pInfo->GetRTMPRepresentation();
-	H_IA(_audioHeader) = isAbsolute;
-	H_TS(_audioHeader) = (uint32_t) dts;
-	H_ML(_audioHeader) = GETAVAILABLEBYTESCOUNT(buffer);
-	return ChunkAndSend(GETIBPOINTER(buffer),
-			GETAVAILABLEBYTESCOUNT(buffer),
-			_audioBucket,
-			_audioHeader,
-			*_pChannelAudio);
-}
-
-bool BaseOutNetRTMPStream::FeedVideoCodecBytes(StreamCapabilities *pCapabilities,
-		double dts, bool isAbsolute) {
-	if (dts < 0)
-		dts = 0;
-	if ((pCapabilities == NULL) || (pCapabilities->GetVideoCodecType() != CODEC_VIDEO_H264))
-		return true;
-	VideoCodecInfoH264 *pInfo = pCapabilities->GetVideoCodec<VideoCodecInfoH264 > ();
-	if (pInfo == NULL)
-		return true;
-	IOBuffer &buffer = pInfo->GetRTMPRepresentation();
-	H_IA(_videoHeader) = isAbsolute;
-	H_TS(_videoHeader) = (uint32_t) dts;
-	H_ML(_videoHeader) = GETAVAILABLEBYTESCOUNT(buffer);
-	return ChunkAndSend(GETIBPOINTER(buffer),
-			GETAVAILABLEBYTESCOUNT(buffer),
-			_videoBucket,
-			_videoHeader,
-			*_pChannelVideo);
 }
 
 bool BaseOutNetRTMPStream::ChunkAndSend(uint8_t *pData, uint32_t length,
@@ -810,7 +789,7 @@ bool BaseOutNetRTMPStream::ChunkAndSend(uint8_t *pData, uint32_t length,
 	}
 
 	if (leftBytesToSend == 0) {
-		o_assert(channel.lastOutProcBytes == H_ML(header));
+		assert(channel.lastOutProcBytes == H_ML(header));
 		channel.lastOutProcBytes = 0;
 	}
 
@@ -865,13 +844,11 @@ bool BaseOutNetRTMPStream::AllowExecution(uint32_t totalProcessed, uint32_t data
 	}
 
 	//we have some data in the output buffer
-	uint32_t outBufferSize = GETAVAILABLEBYTESCOUNT(*_pRTMPProtocol->GetOutputBuffer());
-	if (outBufferSize > _maxBufferSize) {
+	if (GETAVAILABLEBYTESCOUNT(*_pRTMPProtocol->GetOutputBuffer()) > _maxBufferSize) {
 		//we have too many data left unsent. Drop the frame
 		packetsCounter++;
 		bytesCounter += dataLength;
 		currentFrameDropped = true;
-		_pRTMPProtocol->SignalOutBufferFull(outBufferSize, _maxBufferSize);
 		return false;
 	} else {
 		//we can still pump data
@@ -885,7 +862,10 @@ void BaseOutNetRTMPStream::InternalReset() {
 			|| (_pChannelVideo == NULL)
 			|| (_pChannelCommands == NULL))
 		return;
-	_start = -1;
+	_deltaAudioTime = -1;
+	_deltaVideoTime = -1;
+	_pDeltaAudioTime = &_deltaAudioTime;
+	_pDeltaVideoTime = &_deltaVideoTime;
 	_seekTime = 0;
 
 	_videoCurrentFrameDropped = false;
@@ -905,45 +885,38 @@ void BaseOutNetRTMPStream::InternalReset() {
 	_audioBucket.IgnoreAll();
 
 	_attachedStreamType = 0;
-	GetMetadata();
-}
-
-void BaseOutNetRTMPStream::GetMetadata() {
-	_metaFileSize = 0;
-	_metaFileDuration = 0;
-
-	_metadata = Variant();
+	_completeMetadata = Variant();
 	if ((_pInStream != NULL)
-			&& (TAG_KIND_OF(_pInStream->GetType(), ST_IN_FILE))) {
+			&& (TAG_KIND_OF(_pInStream->GetType(), ST_IN_FILE_RTMP))) {
 		InFileRTMPStream *pInFileRTMPStream = (InFileRTMPStream *) _pInStream;
-		_metadata = pInFileRTMPStream->GetCompleteMetadata().publicMetadata();
-		_metaFileSize = _metadata.fileSize();
-		_metaFileDuration = _metadata.duration();
-	}
+		_completeMetadata = pInFileRTMPStream->GetCompleteMetadata();
 
-	_metadata[HTTP_HEADERS_SERVER] = BRANDING_BANNER;
-	StreamCapabilities *pCapabilities = NULL;
-	if (_pInStream != NULL)
-		pCapabilities = _pInStream->GetCapabilities();
-	if (pCapabilities == NULL)
-		return;
-	pCapabilities->GetRTMPMetadata(_metadata);
+	}
 }
 
-bool BaseOutNetRTMPStream::SendOnMetadata() {
-	GetMetadata();
-
-	Variant message = StreamMessageFactory::GetNotifyOnMetaData(_pChannelAudio->id,
-			_rtmpStreamId, 0, false, _metadata,
-			!_sendOnStatusPlayMessages);
-	TRACK_MESSAGE("Message:\n%s", STR(message.ToString()));
-	if (!_pRTMPProtocol->SendMessage(message)) {
-		FATAL("Unable to send message");
-		_pRTMPProtocol->EnqueueForDelete();
-		return false;
+void BaseOutNetRTMPStream::FixTimeBase() {
+	//3. Fix the time base
+	if (_pInStream != NULL) {
+		uint64_t attachedStreamType = _pInStream->GetType();
+		if ((TAG_KIND_OF(attachedStreamType, ST_IN_FILE_RTMP))
+				|| (TAG_KIND_OF(attachedStreamType, ST_IN_NET_RTMP))
+				|| (TAG_KIND_OF(attachedStreamType, ST_IN_NET_LIVEFLV))
+				|| (TAG_KIND_OF(attachedStreamType, ST_IN_NET_RTP))
+				|| (TAG_KIND_OF(attachedStreamType, ST_IN_NET_MP3))
+				|| (TAG_KIND_OF(attachedStreamType, ST_IN_NET_AAC))
+				) {
+			//RTMP streams are having the same time base for audio and video
+			_pDeltaAudioTime = &_deltaAudioTime;
+			_pDeltaVideoTime = &_deltaAudioTime;
+		} else {
+			//otherwise consider them separate
+			_pDeltaAudioTime = &_deltaAudioTime;
+			_pDeltaVideoTime = &_deltaVideoTime;
+		}
+	} else {
+		_pDeltaAudioTime = &_deltaAudioTime;
+		_pDeltaVideoTime = &_deltaVideoTime;
 	}
-
-	return true;
 }
 #endif /* HAS_PROTOCOL_RTMP */
 

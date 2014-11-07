@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -73,15 +73,15 @@ public:
 		T result = 0;
 
 		if (GETAVAILABLEBYTESCOUNT(*this) == 0) {
-			o_assert(false);
+			assert(false);
 		}
 
 		if (GETAVAILABLEBYTESCOUNT(*this) < (_cursor + count) / 8) {
-			o_assert(false);
+			assert(false);
 		}
 
 		if (count>sizeof (T)*8) {
-			o_assert(false);
+			assert(false);
 		}
 
 		for (uint8_t i = 0; i < count; i++) {
@@ -89,7 +89,7 @@ public:
 			uint8_t currentByteIndex = (uint8_t) (currentCursor / 8);
 			uint8_t currentBitIndex = currentCursor % 8;
 			uint8_t currentByte = GETIBPOINTER(*this)[currentByteIndex];
-
+			
 			result = (result << 1) | ((currentByte >> (7 - currentBitIndex))&0x01);
 		}
 
@@ -99,11 +99,11 @@ public:
 
 	void IgnoreBits(uint32_t count) {
 		if (GETAVAILABLEBYTESCOUNT(*this) == 0) {
-			o_assert(false);
+			assert(false);
 		}
 
 		if (GETAVAILABLEBYTESCOUNT(*this) < (_cursor + count) / 8) {
-			o_assert(false);
+			assert(false);
 		}
 
 		_cursor += count;
@@ -116,7 +116,7 @@ public:
 	bool ReadExpGolomb(uint64_t &value) {
 		value = 1;
 		uint32_t zeroBitsCount = 0;
-		for (;;) {
+		while (true) {
 			if (AvailableBits() == 0) {
 				return false;
 			}

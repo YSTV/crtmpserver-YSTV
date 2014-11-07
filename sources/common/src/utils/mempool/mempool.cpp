@@ -78,7 +78,7 @@ MemoryPool::MemoryPool(size_t size) {
 
 MemoryPool::~MemoryPool() {
 	Cleanup();
-	o_assert(_used == 0);
+	assert(_used == 0);
 	MemoryPoolManager::GetInstance().UnRegister(this);
 }
 
@@ -87,7 +87,7 @@ void * MemoryPool::Allocate() {
 	void* pResult = _pEntries;
 	if (pResult == NULL) {
 		_created++;
-		return ::operator new(_size, nothrow);
+		return ::operator new(_size, std::nothrow);
 	} else {
 		_pEntries = _pEntries->pNext;
 		return pResult;
@@ -96,7 +96,7 @@ void * MemoryPool::Allocate() {
 
 void MemoryPool::Deallocate(void *p) {
 	_used--;
-	o_assert(p != NULL);
+	assert(p != NULL);
 	MemPoolEntry* pEntry = (MemPoolEntry *) (p);
 	pEntry->pNext = _pEntries;
 	_pEntries = pEntry;

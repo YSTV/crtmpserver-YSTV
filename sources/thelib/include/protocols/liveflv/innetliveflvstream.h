@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -24,44 +24,48 @@
 
 #include "streaming/baseinnetstream.h"
 
-class DLLEXP InNetLiveFLVStream
+class InNetLiveFLVStream
 : public BaseInNetStream {
 private:
-	double _lastVideoPts;
-	double _lastVideoDts;
+	IOBuffer _videoCodecInit;
+	double _lastVideoTime;
 	uint64_t _videoBytesCount;
 	uint64_t _videoPacketsCount;
 
+
+	IOBuffer _audioCodecInit;
 	double _lastAudioTime;
 	uint64_t _audioBytesCount;
 	uint64_t _audioPacketsCount;
 
 	Variant _lastStreamMessage;
-
 	StreamCapabilities _streamCapabilities;
-	bool _audioCapabilitiesInitialized;
-	bool _videoCapabilitiesInitialized;
 public:
-	InNetLiveFLVStream(BaseProtocol *pProtocol, string name);
+	InNetLiveFLVStream(BaseProtocol *pProtocol, StreamsManager *pStreamsManager,
+			string name);
 	virtual ~InNetLiveFLVStream();
 
 	virtual StreamCapabilities * GetCapabilities();
+
 	virtual bool FeedData(uint8_t *pData, uint32_t dataLength,
 			uint32_t processedLength, uint32_t totalLength,
-			double pts, double dts, bool isAudio);
+			double absoluteTimestamp, bool isAudio);
 	virtual void ReadyForSend();
 	virtual bool IsCompatibleWithType(uint64_t type);
 	virtual void GetStats(Variant &info, uint32_t namespaceId);
 	virtual void SignalOutStreamAttached(BaseOutStream *pOutStream);
 	virtual void SignalOutStreamDetached(BaseOutStream *pOutStream);
-	virtual bool SignalPlay(double &dts, double &length);
+	virtual bool SignalPlay(double &absoluteTimestamp, double &length);
 	virtual bool SignalPause();
 	virtual bool SignalResume();
-	virtual bool SignalSeek(double &dts);
+	virtual bool SignalSeek(double &absoluteTimestamp);
 	virtual bool SignalStop();
 	bool SendStreamMessage(Variant &completeMessage, bool persistent);
 	bool SendStreamMessage(string functionName, Variant &parameters,
 			bool persistent);
+private:
+	bool InitializeAudioCapabilities(uint8_t *pData, uint32_t length);
+	bool InitializeVideoCapabilities(uint8_t *pData, uint32_t length);
 };
 
 

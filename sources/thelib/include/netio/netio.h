@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -21,9 +21,6 @@
 #ifndef _NETIO_H
 #define	_NETIO_H
 
-#include "netio/iohandlertype.h"
-#include "netio/fdstats.h"
-
 #ifdef NET_KQUEUE
 #include "netio/kqueue/iohandler.h"
 #include "netio/kqueue/iohandlermanager.h"
@@ -37,9 +34,9 @@
 #include "netio/kqueue/stdiocarrier.h"
 #ifdef HAS_KQUEUE_TIMERS
 #define NETWORK_REACTOR "kqueue with EVFILT_TIMER support"
-#else /* HAS_KQUEUE_TIMERS */
+#else
 #define NETWORK_REACTOR "kqueue without EVFILT_TIMER support"
-#endif /* HAS_KQUEUE_TIMERS */
+#endif
 #endif
 
 #ifdef NET_EPOLL
@@ -53,11 +50,7 @@
 #include "netio/epoll/tcpconnector.h"
 #include "netio/epoll/inboundnamedpipecarrier.h"
 #include "netio/epoll/stdiocarrier.h"
-#ifdef HAS_EPOLL_TIMERS
-#define NETWORK_REACTOR "epoll with timerfd_XXXX support"
-#else /* HAS_EPOLL_TIMERS */
-#define NETWORK_REACTOR "epoll without timerfd_XXXX support"
-#endif /* HAS_EPOLL_TIMERS */
+#define NETWORK_REACTOR "epoll"
 #endif
 
 #ifdef NET_SELECT
@@ -76,16 +69,26 @@
 #ifdef NET_IOCP
 #include "netio/iocp/iohandler.h"
 #include "netio/iocp/iohandlermanager.h"
+#include "netio/iocp/iohandlermanagertoken.h"
 #include "netio/iocp/iotimer.h"
 #include "netio/iocp/tcpacceptor.h"
 #include "netio/iocp/tcpcarrier.h"
 #include "netio/iocp/udpcarrier.h"
 #include "netio/iocp/tcpconnector.h"
-#ifdef HAS_EPOLL_TIMERS
-#define NETWORK_REACTOR "iocp with native timers"
-#else /* HAS_EPOLL_TIMERS */
-#define NETWORK_REACTOR "iocp without native timers"
-#endif /* HAS_EPOLL_TIMERS */
+#define NETWORK_REACTOR "iocp"
+#endif
+
+#ifdef NET_IOCP2
+#include "netio/iocp2/iohandler.h"
+#include "netio/iocp2/iohandlermanager.h"
+#include "netio/iocp2/iohandlermanagertoken.h"
+#include "netio/iocp2/iotimer.h"
+#include "netio/iocp2/tcpacceptor.h"
+#include "netio/iocp2/tcpcarrier.h"
+#include "netio/iocp2/udpcarrier.h"
+#include "netio/iocp2/tcpconnector.h"
+#include "netio/iocp2/stdiocarrier.h"
+#define NETWORK_REACTOR "iocp2"
 #endif
 
 #endif	/* _NETIO_H */

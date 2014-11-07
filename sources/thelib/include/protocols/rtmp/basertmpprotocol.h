@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -26,7 +26,6 @@
 #include "protocols/rtmp/channel.h"
 #include "protocols/rtmp/rtmpprotocolserializer.h"
 #include "streaming/rtmpstream.h"
-#include "mediaformats/readers/streammetadataresolver.h"
 
 #define RECEIVED_BYTES_COUNT_REPORT_CHUNK 131072
 #define MAX_CHANNELS_COUNT (64+255)
@@ -35,7 +34,7 @@
 #define MIN_AV_CHANNLES 20
 #define MAX_AV_CHANNLES MAX_CHANNELS_COUNT
 
-typedef enum {
+typedef enum _RTMPState {
 	RTMP_STATE_NOT_INITIALIZED,
 	RTMP_STATE_CLIENT_REQUEST_RECEIVED,
 	RTMP_STATE_CLIENT_REQUEST_SENT,
@@ -49,7 +48,9 @@ class BaseOutNetRTMPStream;
 class InFileRTMPStream;
 class InNetRTMPStream;
 class BaseRTMPAppProtocolHandler;
-class ClientSO;
+#ifdef ENFORCE_RTMP_OUTPUT_CHECKS
+class MonitorRTMPProtocol;
+#endif  /* ENFORCE_RTMP_OUTPUT_CHECKS */
 
 class DLLEXP BaseRTMPProtocol
 : public BaseProtocol {
@@ -59,6 +60,10 @@ protected:
 	bool _handshakeCompleted;
 	RTMPState _rtmpState;
 	IOBuffer _outputBuffer;
+#ifdef ENFORCE_RTMP_OUTPUT_CHECKS
+	IOBuffer _intermediateBuffer;
+	MonitorRTMPProtocol *_pMonitor;
+#endif /* ENFORCE_RTMP_OUTPUT_CHECKS */
 	uint64_t _nextReceivedBytesCountReport;
 	uint32_t _winAckSize;
 	Channel _channels[MAX_CHANNELS_COUNT];
@@ -73,20 +78,9 @@ protected:
 	map<InFileRTMPStream *, InFileRTMPStream *> _inFileStreams;
 	uint64_t _rxInvokes;
 	uint64_t _txInvokes;
-	map<string, ClientSO *> _sos;
 public:
 	BaseRTMPProtocol(uint64_t protocolType);
 	virtual ~BaseRTMPProtocol();
-
-	ClientSO *GetSO(string &name);
-	bool CreateSO(string &name);
-	void SignalBeginSOProcess(string &name);
-	bool HandleSOPrimitive(string &name, Variant &primitive);
-	void SignalEndSOProcess(string &name, uint32_t versionNumber);
-	bool ClientSOSend(string &name, Variant &parameters);
-	bool ClientSOSetProperty(string &soName, string &propName, Variant &propValue);
-
-	void SignalOutBufferFull(uint32_t outstanding, uint32_t maxValue);
 
 	virtual bool Initialize(Variant &parameters);
 	virtual bool AllowFarProtocol(uint64_t type);
@@ -117,9 +111,9 @@ public:
 	RTMPStream * CreateNeutralStream(uint32_t &streamId);
 	InNetRTMPStream * CreateINS(uint32_t channelId, uint32_t streamId, string streamName);
 	BaseOutNetRTMPStream * CreateONS(uint32_t streamId, string streamName,
-			uint64_t inStreamType, uint32_t &clientSideBuffer);
+			uint64_t inStreamType);
 	void SignalONS(BaseOutNetRTMPStream *pONS);
-	InFileRTMPStream * CreateIFS(Metadata &metadata, bool hasTimer);
+	InFileRTMPStream * CreateIFS(Variant &metadata);
 	void RemoveIFS(InFileRTMPStream *pIFS);
 
 	Channel *ReserveChannel();

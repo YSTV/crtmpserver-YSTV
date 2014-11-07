@@ -34,13 +34,13 @@ class DLLEXP InboundConnectivity
 private:
 	RTSPProtocol *_pRTSP;
 
-	uint32_t _rtpVideoId;
-	uint32_t _rtcpVideoId;
+	InboundRTPProtocol *_pRTPVideo;
+	RTCPProtocol *_pRTCPVideo;
 	uint8_t _videoRR[60];
 	Variant _videoTrack;
 
-	uint32_t _rtpAudioId;
-	uint32_t _rtcpAudioId;
+	InboundRTPProtocol *_pRTPAudio;
+	RTCPProtocol *_pRTCPAudio;
 	uint8_t _audioRR[60];
 	Variant _audioTrack;
 
@@ -68,7 +68,6 @@ public:
 
 	bool FeedData(uint32_t channelId, uint8_t *pBuffer, uint32_t bufferLength);
 
-	string GetClientPorts(bool isAudio);
 	string GetAudioClientPorts();
 	string GetVideoClientPorts();
 	bool SendRR(bool isAudio);

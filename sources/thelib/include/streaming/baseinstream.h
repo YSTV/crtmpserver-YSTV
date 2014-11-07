@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -36,7 +36,8 @@ protected:
 	map<uint32_t, BaseOutStream *> _linkedStreams;
 	LinkedListNode<BaseOutStream *> *_pOutStreams;
 public:
-	BaseInStream(BaseProtocol *pProtocol, uint64_t type, string name);
+	BaseInStream(BaseProtocol *pProtocol, StreamsManager *pStreamsManager,
+			uint64_t type, string name);
 	virtual ~BaseInStream();
 
 	vector<BaseOutStream *> GetOutStreams();
@@ -63,9 +64,9 @@ public:
 
 	/*!
 		@brief This will start the feeding process
-		@param dts - the timestamp where we want to seek before start the feeding process
+		@param absoluteTimestamp - the timestamp where we want to seek before start the feeding process
 	 */
-	virtual bool Play(double dts, double length);
+	virtual bool Play(double absoluteTimestamp, double length);
 
 	/*!
 		@brief This will pause the feeding process
@@ -79,24 +80,14 @@ public:
 
 	/*!
 		@brief This will seek to the specified point in time.
-		@param dts
+		@param absoluteTimestamp
 	 */
-	virtual bool Seek(double dts);
+	virtual bool Seek(double absoluteTimestamp);
 
 	/*!
 		@brief This will stop the feeding process
 	 */
 	virtual bool Stop();
-
-	/*!
-	 * @brief trigger SignalStreamCapabilitiesChanged on all subscribed streams
-	 */
-	virtual void AudioStreamCapabilitiesChanged(
-			StreamCapabilities *pCapabilities, AudioCodecInfo *pOld,
-			AudioCodecInfo *pNew);
-	virtual void VideoStreamCapabilitiesChanged(
-			StreamCapabilities *pCapabilities, VideoCodecInfo *pOld,
-			VideoCodecInfo *pNew);
 
 	/*!
 		@brief Called after the link is complete
@@ -109,14 +100,6 @@ public:
 		@param pOutStream - the removed stream
 	 */
 	virtual void SignalOutStreamDetached(BaseOutStream *pOutStream) = 0;
-
-	StreamCapabilities * GetCapabilities();
-
-	/*!
-	 *
-	 */
-	virtual uint32_t GetInputVideoTimescale();
-	virtual uint32_t GetInputAudioTimescale();
 };
 
 #endif	/* _BASEINSTREAM_H */

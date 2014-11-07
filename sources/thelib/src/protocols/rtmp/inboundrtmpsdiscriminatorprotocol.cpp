@@ -58,14 +58,12 @@ bool InboundRTMPSDiscriminatorProtocol::SignalInputData(IOBuffer &buffer) {
 
 	//3. Create the proper RTMP stack
 	if (method == HTTP_METHOD_POST) {
-		FATAL("RTMP over HTTPS not supported");
+#ifdef HAS_PROTOCOL_HTTP
+		return BindHTTP(buffer);
+#else
+		FATAL("No HTTP protocol support");
 		return false;
-//#ifdef HAS_PROTOCOL_HTTP
-//		return BindHTTP(buffer);
-//#else
-//		FATAL("No HTTP protocol support");
-//		return false;
-//#endif /* HAS_PROTOCOL_HTTP */
+#endif /* HAS_PROTOCOL_HTTP */
 	} else {
 		return BindSSL(buffer);
 	}

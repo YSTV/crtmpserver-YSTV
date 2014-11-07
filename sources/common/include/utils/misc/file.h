@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -25,24 +25,20 @@
 
 enum FILE_OPEN_MODE {
 	FILE_OPEN_MODE_READ,
-	FILE_OPEN_MODE_WRITE,
 	FILE_OPEN_MODE_TRUNCATE,
 	FILE_OPEN_MODE_APPEND
 };
 
 class DLLEXP File {
 private:
-	FILE *_pFile;
+	fstream _file;
 	uint64_t _size;
 	string _path;
 	bool _truncate;
 	bool _append;
-	bool _suppressLogErrorsOnInit;
 public:
 	File();
 	virtual ~File();
-
-	void SuppressLogErrorsOnInit();
 
 	//Init
 	bool Initialize(string path);
@@ -54,6 +50,7 @@ public:
 	uint64_t Cursor();
 	bool IsEOF();
 	string GetPath();
+	bool Failed();
 	bool IsOpen();
 
 	//seeking

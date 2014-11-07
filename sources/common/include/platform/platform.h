@@ -34,6 +34,7 @@
 #endif /* LINUX */
 
 #ifdef FREEBSD
+#include "platform/freebsd/max.h"
 #include "platform/freebsd/freebsdplatform.h"
 #define Platform FreeBSDPlatform
 #endif /* FREEBSD */
@@ -68,15 +69,5 @@
 #include "platform/android/androidplatform.h"
 #define Platform AndroidPlatform
 #endif /* ANDROID */
-
-#ifdef ASSERT_OVERRIDE
-#define o_assert(x) \
-do { \
-	if((x)==0) \
-		exit(-1); \
-} while(0)
-#else
-#define o_assert(x) assert(x)
-#endif
 
 #endif /* _PLATFORM_H */

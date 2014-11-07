@@ -37,18 +37,7 @@ void BaseCLIAppProtocolHandler::UnRegisterProtocol(BaseProtocol *pProtocol) {
 
 }
 
-bool BaseCLIAppProtocolHandler::SendFail(BaseProtocol *pTo, string description) {
-	Variant dummy;
-	return Send(pTo, "FAIL", description, dummy);
-}
-
-bool BaseCLIAppProtocolHandler::SendSuccess(BaseProtocol *pTo, string description, Variant &data) {
-	return Send(pTo, "SUCCESS", description, data);
-}
-
 bool BaseCLIAppProtocolHandler::Send(BaseProtocol *pTo, string status, string description, Variant &data) {
-	if (pTo == NULL)
-		return true;
 	//1. Prepare the final message
 	Variant message;
 	message["status"] = status;
@@ -64,4 +53,14 @@ bool BaseCLIAppProtocolHandler::Send(BaseProtocol *pTo, string status, string de
 			return false;
 	}
 }
+
+bool BaseCLIAppProtocolHandler::SendFail(BaseProtocol *pTo, string description) {
+	Variant dummy;
+	return Send(pTo, "FAIL", description, dummy);
+}
+
+bool BaseCLIAppProtocolHandler::SendSuccess(BaseProtocol *pTo, string description, Variant &data) {
+	return Send(pTo, "SUCCESS", description, data);
+}
+
 #endif /* HAS_PROTOCOL_CLI */

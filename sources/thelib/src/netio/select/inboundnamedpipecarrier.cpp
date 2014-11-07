@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -36,10 +36,10 @@ InboundNamedPipeCarrier::~InboundNamedPipeCarrier() {
 InboundNamedPipeCarrier *InboundNamedPipeCarrier::Create(string path,
 		uint16_t mode) {
 	int32_t fd = open(STR(path), O_RDONLY/* | O_NONBLOCK*/);
-	if ((fd < 0) || (!setFdCloseOnExec(fd))) {
+	if (fd < 0) {
 		int err = errno;
-		FATAL("Unable to open named pipe %s: (%d) %s",
-				STR(path), err, strerror(err));
+		FATAL("Unable to open named pipe %s:%s (%d)",
+				STR(path), strerror(err), err);
 		deleteFile(path);
 		return NULL;
 	}
@@ -71,7 +71,7 @@ bool InboundNamedPipeCarrier::OnEvent(select_event &event) {
 		case SET_READ:
 		{
 			IOBuffer *pInputBuffer = _pProtocol->GetInputBuffer();
-			o_assert(pInputBuffer != NULL);
+			assert(pInputBuffer != NULL);
 			if (!pInputBuffer->ReadFromPipe(_inboundFd,
 					FD_READ_CHUNK, recvAmount)) {
 				FATAL("Unable to read data");

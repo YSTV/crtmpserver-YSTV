@@ -40,7 +40,6 @@ private:
 	uint16_t _seqRollOver;
 	bool _isAudio;
 	uint32_t _packetsCount;
-	bool _unsolicited;
 #ifdef RTP_DETECT_ROLLOVER
 	uint64_t _lastTimestamp;
 	uint64_t _timestampRollover;
@@ -59,7 +58,7 @@ public:
 	uint32_t GetSSRC();
 	uint32_t GetExtendedSeq();
 
-	void SetStream(InNetRTPStream *pInStream, bool isAudio, bool unsolicited);
+	void SetStream(InNetRTPStream *pInStream, bool isAudio);
 	void SetInbboundConnectivity(InboundConnectivity *pConnectivity);
 };
 

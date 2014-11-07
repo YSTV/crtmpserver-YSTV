@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -62,10 +62,6 @@ bool IOTimer::OnEvent(struct kevent &event) {
 
 bool IOTimer::EnqueueForTimeEvent(uint32_t seconds) {
 	return IOHandlerManager::EnableTimer(this, seconds);
-}
-
-bool IOTimer::EnqueueForHighGranularityTimeEvent(uint32_t milliseconds) {
-	return IOHandlerManager::EnableHighGranularityTimer(this, milliseconds);
 }
 
 IOTimer::operator string() {

@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -23,7 +23,16 @@
 
 #include "common.h"
 #include "netio/epoll/iohandlermanagertoken.h"
-#include "netio/iohandlertype.h"
+
+typedef enum _IOHandlerType {
+	IOHT_ACCEPTOR,
+	IOHT_TCP_CONNECTOR,
+	IOHT_TCP_CARRIER,
+	IOHT_UDP_CARRIER,
+	IOHT_INBOUNDNAMEDPIPE_CARRIER,
+	IOHT_TIMER,
+	IOHT_STDIO
+} IOHandlerType;
 
 class BaseProtocol;
 
@@ -34,8 +43,8 @@ protected:
 	int32_t _inboundFd;
 	int32_t _outboundFd;
 	BaseProtocol *_pProtocol;
-	IOHandlerType _type;
 private:
+	IOHandlerType _type;
 	IOHandlerManagerToken *_pToken;
 public:
 	IOHandler(int32_t inboundFd, int32_t outboundFd, IOHandlerType type);

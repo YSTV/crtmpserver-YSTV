@@ -58,15 +58,11 @@ int vasprintf(char **strp, const char *fmt, va_list ap, int size) {
 }
 
 bool fileExists(string path) {
-#ifdef UNICODE
-	//TODO: Add the unicode implementation here
-	NYIR;
-#else
-	if (PathFileExists(STR(path)))
+	char *lpStr2 = (char *) path.c_str();
+	if (PathFileExists(lpStr2))
 		return true;
 	else
 		return false;
-#endif /* UNICODE */
 }
 
 string tagToString(uint64_t tag) {
@@ -81,7 +77,7 @@ string tagToString(uint64_t tag) {
 }
 
 uint64_t getTagMask(uint64_t tag) {
-	uint64_t result = 0xffffffffffffffffULL;
+	uint64_t result = 0xffffffffffffffffLL;
 	for (int8_t i = 56; i >= 0; i -= 8) {
 		if (((tag >> i)&0xff) == 0)
 			break;
@@ -153,7 +149,7 @@ void split(string str, string separator, vector<string> &result) {
 	result.clear();
 	string::size_type position = str.find(separator);
 	string::size_type lastPosition = 0;
-	uint32_t separatorLength = (uint32_t) separator.length();
+	uint32_t separatorLength = separator.length();
 
 	while (position != str.npos) {
 		ADD_VECTOR_END(result, str.substr(lastPosition, position - lastPosition));
@@ -191,10 +187,10 @@ map<string, string> mapping(string str, string separator1, string separator2, bo
 }
 
 string changeCase(string &value, bool lowerCase) {
-	//int32_t len = (int32_t)value.length();
+	int32_t len = value.length();
 	string newvalue(value);
 	for (string::size_type i = 0, l = newvalue.length(); i < l; ++i)
-		newvalue[i] = (char) (lowerCase ? tolower(newvalue[i]) : toupper(newvalue[i]));
+		newvalue[i] = lowerCase ? tolower(newvalue[i]) : toupper(newvalue[i]);
 	return newvalue;
 }
 
@@ -250,97 +246,39 @@ int inet_aton(const char *pStr, struct in_addr *pRes) {
 	return true;
 }
 
-bool setFdJoinMulticast(SOCKET sock, string bindIp, uint16_t bindPort, string ssmIp) {
-	if (ssmIp == "") {
-		struct ip_mreq group;
-		group.imr_multiaddr.s_addr = inet_addr(STR(bindIp));
-		group.imr_interface.s_addr = INADDR_ANY;
-		if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,
-				(char *) &group, sizeof (group)) < 0) {
-			int err = LASTSOCKETERROR;
-			FATAL("Adding multicast failed. Error was: %d", err);
-			return false;
-		}
-		return true;
-	} else {
-		struct group_source_req multicast;
-		struct sockaddr_in *pGroup = (struct sockaddr_in*) &multicast.gsr_group;
-		struct sockaddr_in *pSource = (struct sockaddr_in*) &multicast.gsr_source;
-
-		memset(&multicast, 0, sizeof (multicast));
-
-		//Setup the group we want to join
-		pGroup->sin_family = AF_INET;
-		pGroup->sin_addr.s_addr = inet_addr(STR(bindIp));
-		pGroup->sin_port = EHTONS(bindPort);
-
-		//setup the source we want to listen
-		pSource->sin_family = AF_INET;
-		pSource->sin_addr.s_addr = inet_addr(STR(ssmIp));
-		if (pSource->sin_addr.s_addr == INADDR_NONE) {
-			FATAL("Unable to SSM on address %s", STR(ssmIp));
-			return false;
-		}
-		pSource->sin_port = 0;
-
-		INFO("Try to SSM on ip %s", STR(ssmIp));
-
-		if (setsockopt(sock, IPPROTO_IP, MCAST_JOIN_SOURCE_GROUP, (char *)&multicast,
-				sizeof (multicast)) < 0) {
-			int err = LASTSOCKETERROR;
-			FATAL("Adding multicast failed. Error was: (%d)", err);
-			return false;
-		}
-
-		return true;
-	}
-}
-
-bool setFdCloseOnExec(int fd) {
-	return true;
-}
-
-bool setFdNonBlock(SOCKET fd) {
+bool setFdNonBlock(int32_t fd) {
 	u_long iMode = 1; // 0 for blocking, anything else for nonblocking
 
 	if (ioctlsocket(fd, FIONBIO, &iMode) < 0) {
-		int err = LASTSOCKETERROR;
-		FATAL("Unable to set fd flags: %d", err);
+		int32_t err = errno;
+		FATAL("Unable to set fd flags: %d,%s", err, strerror(err));
 		return false;
 	}
 	return true;
 }
 
-bool setFdNoSIGPIPE(SOCKET fd) {
+bool setFdNoSIGPIPE(int32_t fd) {
 	return true;
 }
 
-bool setFdKeepAlive(SOCKET fd, bool isUdp) {
-	if (isUdp)
-		return true;
-	int value = 1;
-	if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (char *) &value, sizeof (int)) != 0) {
-		DWORD err = WSAGetLastError();
-		FATAL("setsockopt failed with error %"PRIu32, err);
+bool setFdKeepAlive(int32_t fd) {
+	BOOL value = TRUE;
+	if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (char *) &value, sizeof (BOOL)) == SOCKET_ERROR) {
+		FATAL("Error #%u", WSAGetLastError());
 		return false;
 	}
 	return true;
 }
 
-bool setFdNoNagle(SOCKET fd, bool isUdp) {
-	if (isUdp)
-		return true;
+bool setFdNoNagle(int32_t fd) {
 	BOOL value = TRUE;
 	if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *) &value, sizeof (BOOL)) == SOCKET_ERROR) {
-		DWORD err = WSAGetLastError();
-		FATAL("Unable to disable Nagle algorithm. Error was: %"PRIu32, err);
 		return false;
 	}
-
 	return true;
 }
 
-bool setFdReuseAddress(SOCKET fd) {
+bool setFdReuseAddress(int32_t fd) {
 	BOOL value = TRUE;
 	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &value, sizeof (BOOL)) == SOCKET_ERROR) {
 		FATAL("Error #%u", WSAGetLastError());
@@ -349,27 +287,25 @@ bool setFdReuseAddress(SOCKET fd) {
 	return true;
 }
 
-bool setFdTTL(SOCKET fd, uint8_t ttl) {
+bool setFdTTL(int32_t fd, uint8_t ttl) {
 	NYI;
 	return true;
 }
 
-bool setFdMulticastTTL(SOCKET fd, uint8_t ttl) {
+bool setFdMulticastTTL(int32_t fd, uint8_t ttl) {
 	NYI
 	return true;
 }
 
-bool setFdTOS(SOCKET fd, uint8_t tos) {
+bool setFdTOS(int32_t fd, uint8_t tos) {
 	NYI
 	return true;
 }
 
-bool setFdOptions(SOCKET fd, bool isUdp) {
-	if (!isUdp) {
-		if (!setFdNonBlock(fd)) {
-			FATAL("Unable to set non block");
-			return false;
-		}
+bool setFdOptions(int32_t fd) {
+	if (!setFdNonBlock(fd)) {
+		FATAL("Unable to set non block");
+		return false;
 	}
 
 	if (!setFdNoSIGPIPE(fd)) {
@@ -377,12 +313,12 @@ bool setFdOptions(SOCKET fd, bool isUdp) {
 		return false;
 	}
 
-	if (!setFdKeepAlive(fd, isUdp)) {
+	if (!setFdKeepAlive(fd)) {
 		FATAL("Unable to set keep alive");
 		return false;
 	}
 
-	if (!setFdNoNagle(fd, isUdp)) {
+	if (!setFdNoNagle(fd)) {
 		WARN("Unable to disable Nagle algorithm");
 	}
 
@@ -429,6 +365,8 @@ void splitFileName(string fileName, string &name, string & extension, char separ
 }
 
 string normalizePath(string base, string file) {
+	//	if ((base == "") || (base[base.size() - 1] != PATH_SEPARATOR))
+	//		base += PATH_SEPARATOR;
 	char dummy1[MAX_PATH ];
 	char dummy2[MAX_PATH ];
 	if (GetFullPathName(STR(base), MAX_PATH, dummy1, NULL) == 0)
@@ -464,14 +402,14 @@ bool listFolder(string path, vector<string> &result, bool normalizeAllPaths,
 	// Check that the input path plus 3 is not longer than MAX_PATH.
 	// Three characters are for the "\*" plus NULL appended below.
 	if (path.size() > (MAX_PATH - 3)) {
-		WARN("Directory path is too long: %s.", STR(path));
+		WARN("Directory path is too long: %s.", path.c_str());
 		return false;
 	}
 
 	// Prepare string for use with FindFile functions.  First, copy the
 	// string to a buffer, then append '\*' to the directory name.
 
-	StringCchCopy(szDir, MAX_PATH, STR(path));
+	StringCchCopy(szDir, MAX_PATH, path.c_str());
 	StringCchCat(szDir, MAX_PATH, TEXT("\\*"));
 
 	// Find the first file in the directory.
@@ -531,62 +469,8 @@ bool deleteFile(string path) {
 }
 
 bool deleteFolder(string path, bool force) {
-	string fileFound;
-	WIN32_FIND_DATA info;
-	HANDLE hp;
-	fileFound = format("%s\\*.*", STR(path));
-	hp = FindFirstFile(STR(fileFound), &info);
-
-	// Check first if we have a valid handle!
-	if (hp == INVALID_HANDLE_VALUE) {
-		WARN("Files to be deleted were already removed: %s", STR(fileFound));
-		return true;
-	}
-
-	do {
-		if (!((strcmp(info.cFileName, ".") == 0) ||
-				(strcmp(info.cFileName, "..") == 0))) {
-			if ((info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ==
-					FILE_ATTRIBUTE_DIRECTORY) {
-				string subFolder = path;
-				subFolder.append("\\");
-				subFolder.append(info.cFileName);
-				if (!deleteFolder(subFolder, true)) {
-					FATAL("Unable to delete subfolder %s", STR(subFolder));
-					return false;
-				}
-				if (!RemoveDirectory(STR(subFolder))) {
-					FATAL("Unable to delete subfolder %s", STR(subFolder));
-					return false;
-				}
-			} else {
-				fileFound = format("%s\\%s", STR(path), info.cFileName);
-				if (!DeleteFile(STR(fileFound))) {
-					FATAL("Unable to delete file %s", STR(fileFound));
-					return false;
-				}
-			}
-		}
-	} while (FindNextFile(hp, &info));
-	FindClose(hp);
-	return true;
-}
-
-bool createFolder(string path, bool recursive) {
-	char DirName[256];
-	const char* p = path.c_str();
-	char* q = DirName;
-	while (*p) {
-		if (('\\' == *p) || ('/' == *p)) {
-			if (':' != *(p - 1)) {
-				CreateDirectory(DirName, NULL);
-			}
-		}
-		*q++ = *p++;
-		*q = '\0';
-	}
-	CreateDirectory(DirName, NULL);
-	return true;
+	NYIA;
+	return false;
 }
 
 bool moveFile(string src, string dst) {
@@ -598,32 +482,4 @@ bool moveFile(string src, string dst) {
 	return true;
 }
 
-bool isAbsolutePath(string &path) {
-	if (path.size() < 4)
-		return false;
-	return (((path[0] >= 'A')&&(path[0] <= 'Z')) || ((path[0] >= 'a')&&(path[0] <= 'z')))
-			&&(path[1] == ':')
-			&&(path[2] == '\\');
-}
-
-static time_t _gUTCOffset = -1;
-
-void computeUTCOffset() {
-	//time_t now = time(NULL);
-	//struct tm *pTemp = localtime(&now);
-	//_gUTCOffset = pTemp->tm_gmtoff;
-	NYIA;
-}
-
-time_t getlocaltime() {
-	if (_gUTCOffset == -1)
-		computeUTCOffset();
-	return getutctime() + _gUTCOffset;
-}
-
-time_t gettimeoffset() {
-	if (_gUTCOffset == -1)
-		computeUTCOffset();
-	return _gUTCOffset;
-}
 #endif /* WIN32 */

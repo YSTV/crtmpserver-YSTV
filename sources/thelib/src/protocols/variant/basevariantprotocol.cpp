@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -84,20 +84,15 @@ bool BaseVariantProtocol::SignalInputData(IOBuffer &buffer) {
 		if (!pHTTPProtocol->TransferCompleted())
 			return true;
 
-		_lastReceived.Reset();
-
-		if (pHTTPProtocol->GetContentLength() > 0) {
-			if (!Deserialize(GETIBPOINTER(buffer), pHTTPProtocol->GetContentLength(),
-					_lastReceived)) {
-				string stringContent = string((char *) GETIBPOINTER(buffer), pHTTPProtocol->GetContentLength());
-				FATAL("Unable to deserialize variant content:\n%s", STR(stringContent));
-				return false;
-			}
-			_lastReceived.Compact();
+		if (!Deserialize(GETIBPOINTER(buffer), pHTTPProtocol->GetContentLength(),
+				_lastReceived)) {
+			FATAL("Unable to deserialize content");
+			return false;
 		}
-
 		buffer.Ignore(pHTTPProtocol->GetContentLength());
-		
+
+		_lastReceived.Compact();
+
 		return _pProtocolHandler->ProcessMessage(this, _lastSent, _lastReceived);
 #else
 		FATAL("HTTP protocol not supported");
@@ -115,16 +110,13 @@ bool BaseVariantProtocol::SignalInputData(IOBuffer &buffer) {
 				return true;
 			}
 
-			_lastReceived.Reset();
-
-			if (size > 0) {
-				if (!Deserialize(GETIBPOINTER(buffer) + 4, size, _lastReceived)) {
-					FATAL("Unable to deserialize variant");
-					return false;
-				}
-				_lastReceived.Compact();
+			if (!Deserialize(GETIBPOINTER(buffer) + 4, size, _lastReceived)) {
+				FATAL("Unable to deserialize variant");
+				return false;
 			}
 			buffer.Ignore(size + 4);
+
+			_lastReceived.Compact();
 
 			if (!_pProtocolHandler->ProcessMessage(this, _lastSent, _lastReceived)) {
 				FATAL("Unable to process message");
@@ -160,11 +152,8 @@ bool BaseVariantProtocol::Send(Variant &variant) {
 			}
 
 			_outputBuffer.ReadFromRepeat(0, 4);
-			uint32_t rawContentSize = (uint32_t) rawContent.size();
-			EHTONLP(
-					GETIBPOINTER(_outputBuffer) + GETAVAILABLEBYTESCOUNT(_outputBuffer) - 4, //head minus 4 bytes
-					rawContentSize
-					);
+			uint32_t rawContentSize = rawContent.size();
+			EHTONLP(GETIBPOINTER(_outputBuffer), rawContentSize);
 			_outputBuffer.ReadFromString(rawContent);
 
 			//6. enqueue for outbound

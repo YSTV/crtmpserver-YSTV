@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -20,7 +20,6 @@
 
 #include "protocols/protocolmanager.h"
 #include "protocols/baseprotocol.h"
-#include "netio/netio.h"
 
 map<uint32_t, BaseProtocol *> ProtocolManager::_activeProtocols;
 map<uint32_t, BaseProtocol *> ProtocolManager::_deadProtocols;
@@ -78,34 +77,6 @@ BaseProtocol * ProtocolManager::GetProtocol(uint32_t id,
 	return NULL;
 }
 
-const map<uint32_t, BaseProtocol *> & ProtocolManager::GetActiveProtocols() {
+map<uint32_t, BaseProtocol *> ProtocolManager::GetActiveProtocols() {
 	return _activeProtocols;
-}
-
-void ProtocolManager::GetActiveProtocols(map<uint32_t, BaseProtocol *> &result,
-		protocolManagerFilter_f filter) {
-	result.clear();
-	if (filter == NULL) {
-		result = _activeProtocols;
-		return;
-	}
-
-	FOR_MAP(_activeProtocols, uint32_t, BaseProtocol *, i) {
-		if (!filter(MAP_VAL(i)))
-			continue;
-		result[MAP_VAL(i)->GetId()] = MAP_VAL(i);
-	}
-}
-
-bool protocolManagerNetworkedProtocolsFilter(BaseProtocol *pProtocol) {
-	IOHandler *pIOHandler = pProtocol->GetIOHandler();
-	if ((pIOHandler == NULL)
-			|| ((pIOHandler->GetType() != IOHT_TCP_CARRIER)
-			&& (pIOHandler->GetType() != IOHT_UDP_CARRIER)))
-		return false;
-	return true;
-}
-
-bool protocolManagerNearProtocolsFilter(BaseProtocol *pProtocol) {
-	return pProtocol->GetNearProtocol() == NULL;
 }

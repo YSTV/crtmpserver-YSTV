@@ -23,7 +23,6 @@
 #include "protocols/protocolmanager.h"
 #include "application/baseclientapplication.h"
 #include "protocols/tcpprotocol.h"
-#include "application/clientapplicationmanager.h"
 
 //#define LOG_CONSTRUCTOR_DESTRUCTOR
 
@@ -40,27 +39,21 @@ BaseProtocol::BaseProtocol(uint64_t type) {
 	_gracefullyEnqueueForDelete = false;
 	_pApplication = NULL;
 #ifdef LOG_CONSTRUCTOR_DESTRUCTOR
-	FINEST("Protocol with id %"PRIu32" of type %s created; F: %p,N: %p, DF: %d, DN: %d",
+	FINEST("Protocol with id %u of type %s created; F: %p,N: %p, DF: %hhu, DN: %hhu",
 			_id, STR(tagToString(_type)),
 			_pFarProtocol, _pNearProtocol, _deleteFar, _deleteNear);
 #endif
 	ProtocolManager::RegisterProtocol(this);
-	GETCLOCKS(_creationTimestamp, double);
+	GETCLOCKS(_creationTimestamp);
 	_creationTimestamp /= (double) CLOCKS_PER_SECOND;
 	_creationTimestamp *= 1000.00;
-	_lastKnownApplicationId = 0;
 }
 
 BaseProtocol::~BaseProtocol() {
 #ifdef LOG_CONSTRUCTOR_DESTRUCTOR
-	FINEST("Protocol with id %"PRIu32"(%p) of type %s going to be deleted; F: %p,N: %p, DF: %d, DN: %d",
-			_id,
-			this,
-			STR(tagToString(_type)),
-			_pFarProtocol,
-			_pNearProtocol,
-			_deleteFar,
-			_deleteNear);
+	FINEST("Protocol with id %u of type %s going to be deleted; F: %p,N: %p, DF: %hhu, DN: %hhu",
+			_id, STR(tagToString(_type)),
+			_pFarProtocol, _pNearProtocol, _deleteFar, _deleteNear);
 #endif
 	BaseProtocol *pFar = _pFarProtocol;
 	BaseProtocol *pNear = _pNearProtocol;
@@ -80,14 +73,9 @@ BaseProtocol::~BaseProtocol() {
 		}
 	}
 #ifdef LOG_CONSTRUCTOR_DESTRUCTOR
-	FINEST("Protocol with id %"PRIu32"(%p) of type %s deleted; F: %p,N: %p, DF: %d, DN: %d",
-			_id,
-			this,
-			STR(tagToString(_type)),
-			_pFarProtocol,
-			_pNearProtocol,
-			_deleteFar,
-			_deleteNear);
+	FINEST("Protocol with id %u of type %s deleted; F: %p,N: %p, DF: %hhu, DN: %hhu",
+			_id, STR(tagToString(_type)),
+			_pFarProtocol, _pNearProtocol, _deleteFar, _deleteNear);
 #endif
 	ProtocolManager::UnRegisterProtocol(this);
 }
@@ -123,7 +111,7 @@ void BaseProtocol::SetFarProtocol(BaseProtocol *pProtocol) {
 		_pFarProtocol = pProtocol;
 		pProtocol->SetNearProtocol(this);
 #ifdef LOG_CONSTRUCTOR_DESTRUCTOR
-		FINEST("Protocol with id %"PRIu32" of type %s setted up; F: %p,N: %p, DF: %d, DN: %d",
+		FINEST("Protocol with id %u of type %s setted up; F: %p,N: %p, DF: %hhu, DN: %hhu",
 				_id, STR(tagToString(_type)),
 				_pFarProtocol, _pNearProtocol, _deleteFar, _deleteNear);
 #endif
@@ -160,7 +148,7 @@ void BaseProtocol::SetNearProtocol(BaseProtocol *pProtocol) {
 		_pNearProtocol = pProtocol;
 		pProtocol->SetFarProtocol(this);
 #ifdef LOG_CONSTRUCTOR_DESTRUCTOR
-		FINEST("Protocol with id %"PRIu32" of type %s setted up; F: %p,N: %p, DF: %d, DN: %d",
+		FINEST("Protocol with id %u of type %s setted up; F: %p,N: %p, DF: %hhu, DN: %hhu",
 				_id, STR(tagToString(_type)),
 				_pFarProtocol, _pNearProtocol, _deleteFar, _deleteNear);
 #endif
@@ -201,18 +189,15 @@ BaseProtocol *BaseProtocol::GetNearEndpoint() {
 }
 
 void BaseProtocol::EnqueueForDelete() {
-	if (_enqueueForDelete)
-		return;
 	_enqueueForDelete = true;
 	ProtocolManager::EnqueueForDelete(this);
 }
 
 void BaseProtocol::GracefullyEnqueueForDelete(bool fromFarSide) {
-	_gracefullyEnqueueForDelete = true;
-
 	if (fromFarSide)
 		return GetFarEndpoint()->GracefullyEnqueueForDelete(false);
 
+	_gracefullyEnqueueForDelete = true;
 	if (GetOutputBuffer() != NULL) {
 		return;
 	}
@@ -231,12 +216,6 @@ bool BaseProtocol::IsEnqueueForDelete() {
 
 BaseClientApplication * BaseProtocol::GetApplication() {
 	return _pApplication;
-}
-
-BaseClientApplication * BaseProtocol::GetLastKnownApplication() {
-	if (_pApplication != NULL)
-		return _pApplication;
-	return ClientApplicationManager::FindAppById(_lastKnownApplicationId);
 }
 
 void BaseProtocol::SetOutboundConnectParameters(Variant &customParameters) {
@@ -366,6 +345,11 @@ void BaseProtocol::ReadyForSend() {
 		_pNearProtocol->ReadyForSend();
 }
 
+void BaseProtocol::SignalInterProtocolEvent(Variant &event) {
+	if (_pNearProtocol != NULL)
+		_pNearProtocol->SignalInterProtocolEvent(event);
+}
+
 void BaseProtocol::SetApplication(BaseClientApplication *pApplication) {
 	//1. Get the old and the new application name and id
 	string oldAppName = "(none)";
@@ -398,7 +382,6 @@ void BaseProtocol::SetApplication(BaseClientApplication *pApplication) {
 	//5. Register to it
 	if (_pApplication != NULL) {
 		_pApplication->RegisterProtocol(this);
-		_lastKnownApplicationId = _pApplication->GetId();
 	}
 
 	//6. Trigger log to production
@@ -419,7 +402,7 @@ void BaseProtocol::GetStats(Variant &info, uint32_t namespaceId) {
 	info["type"] = tagToString(_type);
 	info["creationTimestamp"] = _creationTimestamp;
 	double queryTimestamp = 0;
-	GETCLOCKS(queryTimestamp, double);
+	GETCLOCKS(queryTimestamp);
 	queryTimestamp /= (double) CLOCKS_PER_SECOND;
 	queryTimestamp *= 1000.00;
 	info["queryTimestamp"] = queryTimestamp;
@@ -438,3 +421,5 @@ string BaseProtocol::ToString(uint32_t currentId) {
 		result = format("%s(%u)", STR(tagToString(_type)), _id);
 	return result;
 }
+
+

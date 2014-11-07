@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -36,12 +36,10 @@ protected:
 	uint16_t _audioCounter;
 	bool _hasAudio;
 	bool _hasVideo;
-	bool _enabled;
 public:
-	BaseOutNetRTPUDPStream(BaseProtocol *pProtocol, string name);
+	BaseOutNetRTPUDPStream(BaseProtocol *pProtocol,
+			StreamsManager *pStreamsManager, string name);
 	virtual ~BaseOutNetRTPUDPStream();
-
-	void Enable();
 
 	OutboundConnectivity *GetConnectivity();
 	void SetConnectivity(OutboundConnectivity *pConnectivity);
@@ -52,10 +50,10 @@ public:
 	uint16_t VideoCounter();
 	uint16_t AudioCounter();
 
-	virtual bool SignalPlay(double &dts, double &length);
+	virtual bool SignalPlay(double &absoluteTimestamp, double &length);
 	virtual bool SignalPause();
 	virtual bool SignalResume();
-	virtual bool SignalSeek(double &dts);
+	virtual bool SignalSeek(double &absoluteTimestamp);
 	virtual bool SignalStop();
 
 	virtual bool IsCompatibleWithType(uint64_t type);
@@ -64,10 +62,14 @@ public:
 
 	virtual bool FeedData(uint8_t *pData, uint32_t dataLength,
 			uint32_t processedLength, uint32_t totalLength,
-			double pts, double dts, bool isAudio);
+			double absoluteTimestamp, bool isAudio);
 protected:
-	virtual bool FinishInitialization(
-			GenericProcessDataSetup *pGenericProcessDataSetup);
+	virtual bool FeedDataVideo(uint8_t *pData, uint32_t dataLength,
+			uint32_t processedLength, uint32_t totalLength,
+			double absoluteTimestamp, bool isAudio) = 0;
+	virtual bool FeedDataAudio(uint8_t *pData, uint32_t dataLength,
+			uint32_t processedLength, uint32_t totalLength,
+			double absoluteTimestamp, bool isAudio) = 0;
 
 };
 

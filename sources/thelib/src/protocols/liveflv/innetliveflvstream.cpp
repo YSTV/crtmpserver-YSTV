@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -24,12 +24,11 @@
 #include "streaming/streamstypes.h"
 #include "protocols/rtmp/streaming/baseoutnetrtmpstream.h"
 #include "protocols/rtmp/messagefactories/streammessagefactory.h"
-#include "protocols/rtmp/streaming/innetrtmpstream.h"
 
-InNetLiveFLVStream::InNetLiveFLVStream(BaseProtocol *pProtocol, string name)
-: BaseInNetStream(pProtocol, ST_IN_NET_LIVEFLV, name) {
-	_lastVideoPts = 0;
-	_lastVideoDts = 0;
+InNetLiveFLVStream::InNetLiveFLVStream(BaseProtocol *pProtocol,
+		StreamsManager *pStreamsManager, string name)
+: BaseInNetStream(pProtocol, pStreamsManager, ST_IN_NET_LIVEFLV, name) {
+	_lastVideoTime = 0;
 	_videoBytesCount = 0;
 	_videoPacketsCount = 0;
 
@@ -37,11 +36,11 @@ InNetLiveFLVStream::InNetLiveFLVStream(BaseProtocol *pProtocol, string name)
 	_audioBytesCount = 0;
 	_audioPacketsCount = 0;
 
-	_audioCapabilitiesInitialized = false;
-	_videoCapabilitiesInitialized = false;
+	_streamCapabilities.Clear();
 }
 
 InNetLiveFLVStream::~InNetLiveFLVStream() {
+
 }
 
 StreamCapabilities * InNetLiveFLVStream::GetCapabilities() {
@@ -49,40 +48,40 @@ StreamCapabilities * InNetLiveFLVStream::GetCapabilities() {
 }
 
 bool InNetLiveFLVStream::FeedData(uint8_t *pData, uint32_t dataLength,
-		uint32_t processedLength, uint32_t totalLength,
-		double pts, double dts, bool isAudio) {
+		uint32_t processedLength, uint32_t totalLength, double absoluteTimestamp,
+		bool isAudio) {
 	if (isAudio) {
 		_audioPacketsCount++;
 		_audioBytesCount += dataLength;
-		if ((!_audioCapabilitiesInitialized) && (processedLength == 0)) {
-			if (!InNetRTMPStream::InitializeAudioCapabilities(this,
-					_streamCapabilities, _audioCapabilitiesInitialized, pData,
-					dataLength)) {
+		if ((processedLength == 0) && //beginning of a packet
+				(pData[0] >> 4) == 10 && //AAC content
+				(pData[1] == 0)) {// AAC sequence header
+			if (!InitializeAudioCapabilities(pData, dataLength)) {
 				FATAL("Unable to initialize audio capabilities");
 				return false;
 			}
 		}
-		_lastAudioTime = pts;
+		_lastAudioTime = absoluteTimestamp;
 	} else {
 		_videoPacketsCount++;
 		_videoBytesCount += dataLength;
-		if ((!_videoCapabilitiesInitialized) && (processedLength == 0)) {
-			if (!InNetRTMPStream::InitializeVideoCapabilities(this,
-					_streamCapabilities, _videoCapabilitiesInitialized, pData,
-					dataLength)) {
+		if ((processedLength == 0) && //beginning of a packet
+				(pData[0] == 0x17) && //h264 content, keyframe
+				(pData[1] == 0)) {// AVC sequence header
+			if (!InitializeVideoCapabilities(pData, dataLength)) {
 				FATAL("Unable to initialize audio capabilities");
 				return false;
 			}
+
 		}
-		_lastVideoPts = pts;
-		_lastVideoDts = dts;
+		_lastVideoTime = absoluteTimestamp;
 	}
 
 	LinkedListNode<BaseOutStream *> *pTemp = _pOutStreams;
 	while (pTemp != NULL) {
 		if (!pTemp->info->IsEnqueueForDelete()) {
 			if (!pTemp->info->FeedData(pData, dataLength, processedLength, totalLength,
-					pts, dts, isAudio)) {
+					absoluteTimestamp, isAudio)) {
 				FINEST("Unable to feed OS: %p", pTemp->info);
 				pTemp->info->EnqueueForDelete();
 				if (GetProtocol() == pTemp->info->GetProtocol()) {
@@ -102,20 +101,40 @@ void InNetLiveFLVStream::ReadyForSend() {
 bool InNetLiveFLVStream::IsCompatibleWithType(uint64_t type) {
 	return TAG_KIND_OF(type, ST_OUT_NET_RTMP)
 			|| TAG_KIND_OF(type, ST_OUT_NET_RTP)
-			|| TAG_KIND_OF(type, ST_OUT_FILE_RTMP_FLV);
+			|| TAG_KIND_OF(type, ST_OUT_FILE_HLS);
 }
 
 void InNetLiveFLVStream::GetStats(Variant &info, uint32_t namespaceId) {
 	BaseInNetStream::GetStats(info, namespaceId);
 	info["audio"]["bytesCount"] = _audioBytesCount;
 	info["audio"]["packetsCount"] = _audioPacketsCount;
-	info["audio"]["droppedPacketsCount"] = static_cast<const uint32_t>(0);
+	info["audio"]["droppedPacketsCount"] = 0;
 	info["video"]["bytesCount"] = _videoBytesCount;
 	info["video"]["packetsCount"] = _videoPacketsCount;
-	info["video"]["droppedPacketsCount"] = static_cast<const uint32_t>(0);
+	info["video"]["droppedPacketsCount"] = 0;
 }
 
 void InNetLiveFLVStream::SignalOutStreamAttached(BaseOutStream *pOutStream) {
+	if (GETAVAILABLEBYTESCOUNT(_videoCodecInit) != 0) {
+		if (!pOutStream->FeedData(GETIBPOINTER(_videoCodecInit),
+				GETAVAILABLEBYTESCOUNT(_videoCodecInit), 0,
+				GETAVAILABLEBYTESCOUNT(_videoCodecInit),
+				_lastVideoTime, false)) {
+			FINEST("Unable to feed OS: %u", pOutStream->GetUniqueId());
+			pOutStream->EnqueueForDelete();
+		}
+	}
+
+	if (GETAVAILABLEBYTESCOUNT(_audioCodecInit) != 0) {
+		if (!pOutStream->FeedData(GETIBPOINTER(_audioCodecInit),
+				GETAVAILABLEBYTESCOUNT(_audioCodecInit), 0,
+				GETAVAILABLEBYTESCOUNT(_audioCodecInit),
+				_lastAudioTime, true)) {
+			FINEST("Unable to feed OS: %u", pOutStream->GetUniqueId());
+			pOutStream->EnqueueForDelete();
+		}
+	}
+
 	if (_lastStreamMessage != V_NULL) {
 		if (TAG_KIND_OF(pOutStream->GetType(), ST_OUT_NET_RTMP)) {
 			if (!((BaseOutNetRTMPStream *) pOutStream)->SendStreamMessage(
@@ -131,7 +150,7 @@ void InNetLiveFLVStream::SignalOutStreamDetached(BaseOutStream *pOutStream) {
 
 }
 
-bool InNetLiveFLVStream::SignalPlay(double &dts, double &length) {
+bool InNetLiveFLVStream::SignalPlay(double &absoluteTimestamp, double &length) {
 	return true;
 }
 
@@ -143,7 +162,7 @@ bool InNetLiveFLVStream::SignalResume() {
 	return true;
 }
 
-bool InNetLiveFLVStream::SignalSeek(double &dts) {
+bool InNetLiveFLVStream::SignalSeek(double &absoluteTimestamp) {
 	return true;
 }
 
@@ -191,4 +210,41 @@ bool InNetLiveFLVStream::SendStreamMessage(string functionName, Variant &paramet
 	return SendStreamMessage(message, persistent);
 }
 
+bool InNetLiveFLVStream::InitializeAudioCapabilities(uint8_t *pData, uint32_t length) {
+	if (length < 4) {
+		FATAL("Invalid length");
+		return false;
+	}
+	_audioCodecInit.IgnoreAll();
+	_audioCodecInit.ReadFromBuffer(pData, length);
+	if (!_streamCapabilities.InitAudioAAC(pData + 2, length - 2)) {
+		FATAL("InitAudioAAC failed");
+		return false;
+	}
+	FINEST("Cached the AAC audio codec initialization: %u",
+			GETAVAILABLEBYTESCOUNT(_audioCodecInit));
+	return true;
+}
+
+bool InNetLiveFLVStream::InitializeVideoCapabilities(uint8_t *pData, uint32_t length) {
+	if (length == 0)
+		return false;
+
+	_videoCodecInit.IgnoreAll();
+	_videoCodecInit.ReadFromBuffer(pData, length);
+	uint8_t *pSPS = pData + 13;
+	uint32_t spsLength = ENTOHSP(pData + 11);
+	uint8_t *pPPS = pData + 13 + spsLength + 3;
+	uint32_t ppsLength = ENTOHSP(pData
+			+ 13 + spsLength + 1);
+	if (!_streamCapabilities.InitVideoH264(pSPS, spsLength, pPPS, ppsLength)) {
+		FATAL("InitVideoH264 failed");
+		return false;
+	}
+
+	FINEST("Cached the h264 video codec initialization: %u",
+			GETAVAILABLEBYTESCOUNT(_videoCodecInit));
+
+	return true;
+}
 #endif /* HAS_PROTOCOL_LIVEFLV */

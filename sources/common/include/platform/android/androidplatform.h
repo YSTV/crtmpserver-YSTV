@@ -39,6 +39,8 @@
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <fstream>
+#include <iostream>
 #include <list>
 #include <map>
 #include <netdb.h>
@@ -46,7 +48,6 @@
 #include <netinet/tcp.h>
 #include <signal.h>
 #include <sstream>
-#include <stdint.h>
 #include <stdio.h>
 #include <string>
 #include <sys/epoll.h>
@@ -55,21 +56,12 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <vector>
-#include <queue>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <string.h>
-#include <stdarg.h>
-#include <unistd.h>
-#include <sys/wait.h>
-#include <time.h>
 using namespace std;
 
 //platform defines
 #define DLLEXP
 #define HAS_MMAP 1
-#define NO_SSL_ENGINE_CLEANUP
-#define COLOR_TYPE const char *
+#define COLOR_TYPE string
 #define FATAL_COLOR "\033[01;31m"
 #define ERROR_COLOR "\033[22;31m"
 #define WARNING_COLOR "\033[01;33m"
@@ -78,15 +70,12 @@ using namespace std;
 #define FINE_COLOR "\033[22;37m"
 #define FINEST_COLOR "\033[22;37m"
 #define NORMAL_COLOR "\033[0m"
-#define SET_CONSOLE_TEXT_COLOR(color) fprintf(stdout,"%s",color)
+#define SET_CONSOLE_TEXT_COLOR(color) cout<<color
 #define READ_FD read
 #define WRITE_FD write
-#define SOCKET int32_t
 #define LASTSOCKETERROR					errno
-#define SOCKERROR_EINPROGRESS			EINPROGRESS
-#define SOCKERROR_EAGAIN				EAGAIN
-#define SOCKERROR_ECONNRESET			ECONNRESET
-#define SOCKERROR_ENOBUFS				ENOBUFS
+#define SOCKERROR_CONNECT_IN_PROGRESS	EINPROGRESS
+#define SOCKERROR_SEND_IN_PROGRESS		EAGAIN
 #define LIB_HANDLER void *
 #define FREE_LIBRARY(libHandler) dlclose((libHandler))
 #define LOAD_LIBRARY(file,flags) dlopen((file), (flags))
@@ -99,8 +88,6 @@ using namespace std;
 #define InitNetworking()
 #define MAP_NOCACHE 0
 #define MAP_NOEXTEND 0
-#define FD_READ_CHUNK 32768
-#define FD_WRITE_CHUNK FD_READ_CHUNK
 #define SO_NOSIGPIPE 0
 #define SET_UNKNOWN 0
 #define SET_READ 1
@@ -108,26 +95,18 @@ using namespace std;
 #define SET_TIMER 3
 #define FD_READ_CHUNK 32768
 #define FD_WRITE_CHUNK FD_READ_CHUNK
-#define RESET_TIMER(timer,sec,usec) timer.tv_sec=sec;timer.tv_usec=usec;
 #define FD_COPY(src,dst) memcpy(dst,src,sizeof(fd_set));
+#define RESET_TIMER(timer,sec,usec) timer.tv_sec=sec;timer.tv_usec=usec;
 #define SRAND() srand(time(NULL));
 #define Timestamp struct tm
 #define Timestamp_init {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-#define PIOFFT off_t
 
 #define CLOCKS_PER_SECOND 1000000L
-#define GETCLOCKS(result,type) \
+#define GETCLOCKS(result) \
 do { \
     struct timeval ___timer___; \
     gettimeofday(&___timer___,NULL); \
-    result=(type)___timer___.tv_sec*(type)CLOCKS_PER_SECOND+(type) ___timer___.tv_usec; \
-}while(0);
-
-#define GETMILLISECONDS(result) \
-do { \
-    struct timespec ___timer___; \
-    clock_gettime(CLOCK_MONOTONIC, &___timer___); \
-    result=(uint64_t)___timer___.tv_sec*1000+___timer___.tv_nsec/1000000; \
+    result=(double)___timer___.tv_sec*(double)CLOCKS_PER_SECOND+(double) ___timer___.tv_usec; \
 }while(0);
 
 #define GETNTP(result) \
@@ -140,8 +119,8 @@ do { \
 #define GETCUSTOMNTP(result,value) \
 do { \
 	struct timeval tv; \
-	tv.tv_sec=(uint64_t)value/CLOCKS_PER_SECOND; \
-	tv.tv_usec=(uint64_t)value-tv.tv_sec*CLOCKS_PER_SECOND; \
+	tv.tv_sec=value/CLOCKS_PER_SECOND; \
+	tv.tv_usec=value-tv.tv_sec*CLOCKS_PER_SECOND; \
 	result=(((uint64_t)tv.tv_sec + 2208988800U)<<32)|((((uint32_t)tv.tv_usec) << 12) + (((uint32_t)tv.tv_usec) << 8) - ((((uint32_t)tv.tv_usec) * 1825) >> 5)); \
 }while (0);
 
@@ -162,16 +141,12 @@ typedef struct _select_event {
 #define IOVEC iovec
 #define MSGHDR_MSG_IOV msg_iov
 #define MSGHDR_MSG_IOVLEN msg_iovlen
-#define MSGHDR_MSG_IOVLEN_TYPE size_t
 #define MSGHDR_MSG_NAME msg_name
 #define MSGHDR_MSG_NAMELEN msg_namelen
 #define IOVEC_IOV_BASE iov_base
 #define IOVEC_IOV_LEN iov_len
 #define IOVEC_IOV_BASE_TYPE uint8_t
 #define SENDMSG(s,msg,flags,sent) sendmsg(s,msg,flags)
-
-#define ftell64 ftello
-#define fseek64 fseeko
 
 string format(string fmt, ...);
 string vFormat(string fmt, va_list args);
@@ -181,20 +156,17 @@ string lowerCase(string value);
 string upperCase(string value);
 string changeCase(string &value, bool lowerCase);
 string tagToString(uint64_t tag);
-bool setFdJoinMulticast(SOCKET sock, string bindIp, uint16_t bindPort, string ssmIp);
-bool setFdCloseOnExec(int fd);
-bool setFdNonBlock(SOCKET fd);
-bool setFdNoSIGPIPE(SOCKET fd);
-bool setFdKeepAlive(SOCKET fd, bool isUdp);
-bool setFdNoNagle(SOCKET fd, bool isUdp);
-bool setFdReuseAddress(SOCKET fd);
-bool setFdTTL(SOCKET fd, uint8_t ttl);
-bool setFdMulticastTTL(SOCKET fd, uint8_t ttl);
-bool setFdTOS(SOCKET fd, uint8_t tos);
-bool setFdOptions(SOCKET fd, bool isUdp);
+bool setFdNonBlock(int32_t fd);
+bool setFdNoSIGPIPE(int32_t fd);
+bool setFdKeepAlive(int32_t fd);
+bool setFdNoNagle(int32_t fd);
+bool setFdReuseAddress(int32_t fd);
+bool setFdTTL(int32_t fd, uint8_t ttl);
+bool setFdMulticastTTL(int32_t fd, uint8_t ttl);
+bool setFdTOS(int32_t fd, uint8_t tos);
+bool setFdOptions(int32_t fd);
 bool deleteFile(string path);
 bool deleteFolder(string path, bool force);
-bool createFolder(string path, bool recursive);
 string getHostByName(string name);
 bool isNumeric(string value);
 void split(string str, string separator, vector<string> &result);
@@ -212,14 +184,9 @@ bool listFolder(string path, vector<string> &result,
 		bool normalizeAllPaths = true, bool includeFolders = false,
 		bool recursive = true);
 bool moveFile(string src, string dst);
-bool isAbsolutePath(string &path);
-void installSignal(int sig, SignalFnc pSignalFnc);
 void installQuitSignal(SignalFnc pQuitSignalFnc);
 void installConfRereadSignal(SignalFnc pConfRereadSignalFnc);
 time_t timegm(struct tm *tm);
-#define getutctime() time(NULL)
-time_t getlocaltime();
-time_t gettimeoffset();
+
 #endif /* _ANDROIDPLATFORM_H */
 #endif /* ANDROID */
-

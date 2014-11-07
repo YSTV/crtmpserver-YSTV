@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -32,11 +32,34 @@
 map<string, __FileInfo__ > MmapFile::_fds;
 int32_t MmapFile::_pageSize = 0;
 
-MmapPointer::MmapPointer() {
-	_pData = NULL;
-	_size = 0;
+MmapFile::MmapFile() {
 	_cursor = 0;
-	_bytesRead = 0;
+	_size = 0;
+	_failed = false;
+	if (_pageSize == 0) {
+		_pageSize = getpagesize();
+		LOG_MMAP("_pageSize: %u", _pageSize);
+	}
+	_windowSize = 0;
+	memset(&_pointer1, 0, sizeof (MmapPointer));
+	memset(&_pointer2, 0, sizeof (MmapPointer));
+}
+
+MmapFile::~MmapFile() {
+	_pointer1.Free();
+	_pointer2.Free();
+
+	if (MAP_HAS1(_fds, _path)) {
+		_fds[_path].useCount = _fds[_path].useCount - 1;
+		if (_fds[_path].useCount == 0) {
+			close(_fds[_path].fd);
+			_fds.erase(_path);
+		}
+	}
+}
+
+MmapPointer::MmapPointer() {
+
 }
 
 MmapPointer::~MmapPointer() {
@@ -73,8 +96,7 @@ bool MmapPointer::Allocate(int fd, uint64_t cursor,
 			_cursor);
 	if (_pData == MAP_FAILED) {
 		_pData = NULL;
-		int err = errno;
-		FATAL("Unable to mmap: (%d) %s", err, strerror(err));
+		FATAL("Unable to mmap: %d %s", errno, strerror(errno));
 		return false;
 	}
 
@@ -85,8 +107,7 @@ bool MmapPointer::Free() {
 	if (_size == 0)
 		return true;
 	if (munmap(_pData, _size) != 0) {
-		int err = errno;
-		FATAL("Unable to munmap: (%d) %s", err, strerror(err));
+		FATAL("Unable to munmap: %d %s", errno, strerror(errno));
 		return false;
 	}
 	_pData = NULL;
@@ -130,31 +151,7 @@ MmapPointer::operator string() {
 	return format("[%"PRIu64" - %"PRIu64"](%u)", _cursor, _cursor + _size - 1, _size);
 }
 
-MmapFile::MmapFile() {
-	_cursor = 0;
-	_size = 0;
-	_failed = false;
-	if (_pageSize == 0) {
-		_pageSize = getpagesize();
-		LOG_MMAP("_pageSize: %u", _pageSize);
-	}
-	_windowSize = 0;
-}
-
-MmapFile::~MmapFile() {
-	_pointer1.Free();
-	_pointer2.Free();
-
-	if (MAP_HAS1(_fds, _path)) {
-		_fds[_path].useCount = _fds[_path].useCount - 1;
-		if (_fds[_path].useCount == 0) {
-			close(_fds[_path].fd);
-			_fds.erase(_path);
-		}
-	}
-}
-
-bool MmapFile::Initialize(string path, uint32_t windowSize) {
+bool MmapFile::Initialize(string path, uint32_t windowSize, bool exclusive) {
 	//1. Do we have this file open?
 	LOG_MMAP("Initial window size: %u", windowSize);
 	uint32_t pagesCount = windowSize / _pageSize;
@@ -167,20 +164,29 @@ bool MmapFile::Initialize(string path, uint32_t windowSize) {
 		__FileInfo__ fi = {0, 0, 0};
 
 		//2. Open the file
-		fi.fd = open(STR(_path), O_RDONLY); //NOINHERIT
-		
+		if (exclusive) {
+			fi.fd = open(STR(_path), O_RDWR);
+		} else {
+			fi.fd = open(STR(_path), O_RDONLY);
+		}
 		if (fi.fd <= 0) {
-			int err = errno;
-			FATAL("Unable to open file %s: (%d) %s", STR(_path), err, strerror(err));
+			FATAL("Unable to open file %s: %d: %s", STR(_path), errno, strerror(errno));
 			_failed = true;
 			return false;
+		}
+		if (exclusive) {
+			if (lockf(fi.fd, F_TLOCK, 0) != 0) {
+				FATAL("Unable to lock file %s: %d: %s", STR(_path), errno, strerror(errno));
+				_failed = true;
+				close(fi.fd);
+				return false;
+			}
 		}
 
 		//2. Get its size
 		struct stat s;
 		if (fstat(fi.fd, &s) != 0) {
-			int err = errno;
-			FATAL("Unable to stat file %s: (%d) %s", STR(_path), err, strerror(err));
+			FATAL("Unable to stat file %s: %d: %s", STR(_path), errno, strerror(errno));
 			_failed = true;
 			close(fi.fd);
 			return false;

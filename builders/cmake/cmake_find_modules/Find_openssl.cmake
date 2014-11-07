@@ -1,14 +1,13 @@
-FIND_PATH(OPENSSL_INCLUDE_PATH
+FIND_PATH(OPENSSL_INCLUDE_PATH 
 	NAMES
 		openssl/ssl.h
 	PATHS
-		${TOOLCHAIN_HEADER_PATH}
 		/opt/local/include
-		/sw/include
 		/usr/include
 		/usr/local/include
+		/sw/include
 		/usr/local/ssl/include
-		NO_DEFAULT_PATH)
+		)
 
 IF($ENV{COMPILE_STATIC} MATCHES "1")
 	SET(CMAKE_FIND_LIBRARY_SUFFIXES_OLD ${CMAKE_FIND_LIBRARY_SUFFIXES})
@@ -19,81 +18,53 @@ FIND_LIBRARY(OPENSSL_LIBRARY_PATH
 	NAMES
 		ssl
 	PATHS
-		${TOOLCHAIN_LIBRARY_PATH}
-		/opt/local/lib64
 		/opt/local/lib
-		/sw/lib64
-		/sw/lib
-		/lib64
 		/usr/lib64
-		/usr/local/lib64
-		/lib/x86_64-linux-gnu
-		/usr/lib/x86_64-linux-gnu
-		/opt/local/lib64
-		/lib
 		/usr/lib
+		/usr/local/lib64
 		/usr/local/lib
-		/lib/i386-linux-gnu
-		/usr/lib/i386-linux-gnu
+		/sw/lib
 		/usr/local/ssl/lib
-		NO_DEFAULT_PATH)
+		/lib
+		)
 
 FIND_LIBRARY(CRYPTO_LIBRARY_PATH
 	NAMES
 		crypto
 	PATHS
-		${TOOLCHAIN_LIBRARY_PATH}
-		/opt/local/lib64
 		/opt/local/lib
-		/sw/lib64
-		/sw/lib
-		/lib64
 		/usr/lib64
-		/usr/local/lib64
-		/lib/x86_64-linux-gnu
-		/usr/lib/x86_64-linux-gnu
-		/lib
 		/usr/lib
-		/usr/lib/x86_64-linux-gnu/
 		/usr/local/lib64
 		/usr/local/lib
-		/lib/i386-linux-gnu
-		/usr/lib/i386-linux-gnu
+		/sw/lib
 		/usr/local/ssl/lib
-		NO_DEFAULT_PATH)
+		/lib
+		)
 
 IF($ENV{COMPILE_STATIC} MATCHES "1")
 	FIND_LIBRARY(Z_LIBRARY_PATH
 		NAMES
 			z
 		PATHS
-			/opt/local/lib64
 			/opt/local/lib
-			/sw/lib64
-			/sw/lib
-			/lib64
 			/usr/lib64
-			/usr/local/lib64
-			/lib/x86_64-linux-gnu
-			/usr/lib/x86_64-linux-gnu
-			/lib
 			/usr/lib
-			/usr/lib/x86_64-linux-gnu/
 			/usr/local/lib64
 			/usr/local/lib
-			/lib/i386-linux-gnu
-			/usr/lib/i386-linux-gnu
+			/sw/lib
 			/usr/local/ssl/lib
+			/lib
 			NO_DEFAULT_PATH)
 	SET(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES_OLD})
 ELSEIF($ENV{COMPILE_STATIC} MATCHES "1")
 	SET(Z_LIBRARY_PATH "")
 ENDIF($ENV{COMPILE_STATIC} MATCHES "1")
 
-MESSAGE(STATUS "OPENSSL_INCLUDE_PATH: ${OPENSSL_INCLUDE_PATH}")
-MESSAGE(STATUS "OPENSSL_LIBRARY_PATH: ${OPENSSL_LIBRARY_PATH}")
-MESSAGE(STATUS "CRYPTO_LIBRARY_PATH: ${CRYPTO_LIBRARY_PATH}")
-MESSAGE(STATUS "Z_LIBRARY_PATH: ${Z_LIBRARY_PATH}")
+MESSAGE("OPENSSL_INCLUDE_PATH: ${OPENSSL_INCLUDE_PATH}")
+MESSAGE("OPENSSL_LIBRARY_PATH: ${OPENSSL_LIBRARY_PATH}")
+MESSAGE("CRYPTO_LIBRARY_PATH: ${CRYPTO_LIBRARY_PATH}")
+MESSAGE("Z_LIBRARY_PATH: ${Z_LIBRARY_PATH}")
 
 IF(OPENSSL_INCLUDE_PATH)
 	SET(OPENSSL_FOUND 1 CACHE STRING "Set to 1 if openssl is found, 0 otherwise")

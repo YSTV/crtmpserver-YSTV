@@ -37,7 +37,7 @@
 /*!
 	@class DHWrapper
 	@brief Class that handles the DH wrapper
- */
+*/
 class DLLEXP DHWrapper {
 private:
 	int32_t _bitsCount;
@@ -51,35 +51,35 @@ public:
 
 	/*!
 		@brief Initializes the DH wrapper
-	 */
+	*/
 	bool Initialize();
 
 	/*!
 		@brief Copies the public key.
 		@param pDst - Where the copied key is stored
 		@param dstLength
-	 */
+	*/
 	bool CopyPublicKey(uint8_t *pDst, int32_t dstLength);
 
 	/*!
 		@brief Copies the private key.
 		@param pDst - Where the copied key is stored
 		@param dstLength
-	 */
+	*/
 	bool CopyPrivateKey(uint8_t *pDst, int32_t dstLength);
 
 	/*!
 		@brief Creates a shared secret key
 		@param pPeerPublicKey
 		@param length
-	 */
+	*/
 	bool CreateSharedKey(uint8_t *pPeerPublicKey, int32_t length);
 
 	/*!
 		@brief Copies the shared secret key.
 		@param pDst - Where the copied key is stored
 		@param dstLength
-	 */
+	*/
 	bool CopySharedKey(uint8_t *pDst, int32_t dstLength);
 private:
 	void Cleanup();
@@ -92,15 +92,11 @@ DLLEXP string md5(string source, bool textResult);
 DLLEXP string md5(uint8_t *pBuffer, uint32_t length, bool textResult);
 DLLEXP void HMACsha256(const void *pData, uint32_t dataLength, const void *pKey,
 		uint32_t keyLength, void *pResult);
-DLLEXP string sha256(string source);
 DLLEXP string b64(string source);
 DLLEXP string b64(uint8_t *pBuffer, uint32_t length);
 DLLEXP string unb64(string source);
 DLLEXP string unb64(uint8_t *pBuffer, uint32_t length);
-DLLEXP string hex(string source);
-DLLEXP string hex(const uint8_t *pBuffer, uint32_t length);
 DLLEXP string unhex(string source);
-DLLEXP string unhex(const uint8_t *pBuffer, uint32_t length);
 DLLEXP void CleanupSSL();
 
 #endif /* _CRYPTO_H */

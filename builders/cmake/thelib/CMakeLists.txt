@@ -10,6 +10,7 @@ INCLUDE_DIRECTORIES(
 	${LUA_INCLUDE_PATH}
 	${CRTMPSERVER_SOURCES_ROOT}/common/include
 	${CRTMPSERVER_SOURCES_ROOT}/thelib/include
+	#/Users/shiretu/work/ffmpeg_bin/include
 	)
 
 #create the library
@@ -22,6 +23,10 @@ IF(${LIB_TYPE} MATCHES "SHARED")
 		${OPENSSL_LIBRARY_PATH} 
 		${CRYPTO_LIBRARY_PATH}
 		${Z_LIBRARY_PATH}
+		#/opt/local/lib/libiconv.dylib
+		#/Users/shiretu/work/ffmpeg_bin/lib/libavcodec.dylib
+		#/Users/shiretu/work/ffmpeg_bin/lib/libavformat.dylib
+		#/Users/shiretu/work/ffmpeg_bin/lib/libavutil.dylib
 		)	
 	INSTALL(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${CRTMPSERVER_ROOT})
 ENDIF(${LIB_TYPE} MATCHES "SHARED")

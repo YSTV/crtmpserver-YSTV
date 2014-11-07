@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -36,7 +36,7 @@ private:
 	RC4_KEY* _pKeyOut;
 	DHWrapper *_pDHWrapper;
 	uint8_t _usedScheme;
-	bool _encrypted;
+	IOBuffer _outputBuffer222;
 public:
 	OutboundRTMPProtocol();
 	virtual ~OutboundRTMPProtocol();

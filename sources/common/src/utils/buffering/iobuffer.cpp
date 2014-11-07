@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -23,11 +23,11 @@
 
 #ifdef WITH_SANITY_INPUT_BUFFER
 #define SANITY_INPUT_BUFFER \
-o_assert(_consumed<=_published); \
-o_assert(_published<=_size);
+assert(_consumed<=_published); \
+assert(_published<=_size);
 #define SANITY_INPUT_BUFFER_INDEX \
-o_assert(index >= 0); \
-o_assert((_published - _consumed - index) > 0);
+assert(index >= 0); \
+assert((_published - _consumed - index) > 0);
 #else
 #define SANITY_INPUT_BUFFER
 #define SANITY_INPUT_BUFFER_INDEX
@@ -74,9 +74,9 @@ bool IOBuffer::ReadFromPipe(int32_t fd, uint32_t expected, int32_t &recvAmount) 
 		SANITY_INPUT_BUFFER;
 		return true;
 	} else {
-		int err = errno;
+		int32_t err = errno;
 		if (err != EINPROGRESS) {
-			FATAL("Unable to read from pipe: (%d) %s", err, strerror(err));
+			FATAL("Unable to read from pipe: %d %s", err, strerror(err));
 			SANITY_INPUT_BUFFER;
 			return false;
 		}
@@ -104,17 +104,8 @@ bool IOBuffer::ReadFromTCPFd(int32_t fd, uint32_t expected, int32_t &recvAmount)
 		SANITY_INPUT_BUFFER;
 		return true;
 	} else {
-		int err = LASTSOCKETERROR;
-		if ((err != SOCKERROR_EAGAIN)&&(err != SOCKERROR_EINPROGRESS)) {
-			FATAL("Unable to read data. Size advertised by network layer was %"PRIu32". Permanent error: %d",
-					expected, err);
-			SANITY_INPUT_BUFFER;
-			return false;
-		}
-		//		else {
-		//			WARN("SOCKERROR_EAGAIN or SOCKERROR_EINPROGRESS encountered");
-		//		}
-		return true;
+		SANITY_INPUT_BUFFER;
+		return false;
 	}
 }
 
@@ -134,18 +125,6 @@ bool IOBuffer::ReadFromUDPFd(int32_t fd, int32_t &recvAmount, sockaddr_in &peerA
 		SANITY_INPUT_BUFFER;
 		return true;
 	} else {
-		int err = LASTSOCKETERROR;
-#ifdef WIN32
-		//Patch from https://groups.google.com/forum/#!msg/c-rtmp-server/6W0iHZ8fS_w/b4c5ODm1NfUJ
-		if ((err == WSAECONNRESET) ||
-			(err == WSAENETRESET) ||
-			(err == WSAEMSGSIZE)) {
-			WARN("Windows is stupid enough to issue a CONNRESET on a UDP socket. See http://support.microsoft.com/?kbid=263823 for details");
-			SANITY_INPUT_BUFFER;
-			return true;
-		}
-#endif /* WIN32 */
-		FATAL("Unable to read data from UDP socket. Error was: %d", err);
 		SANITY_INPUT_BUFFER;
 		return false;
 	}
@@ -169,6 +148,24 @@ bool IOBuffer::ReadFromStdio(int32_t fd, uint32_t expected, int32_t &recvAmount)
 		SANITY_INPUT_BUFFER;
 		return false;
 	}
+}
+
+bool IOBuffer::ReadFromFs(fstream &fs, uint32_t size) {
+	SANITY_INPUT_BUFFER;
+	if (_published + size > _size) {
+		if (!EnsureSize(size)) {
+			SANITY_INPUT_BUFFER;
+			return false;
+		}
+	}
+	fs.read((char *) _pBuffer + _published, size);
+	if (fs.fail()) {
+		SANITY_INPUT_BUFFER;
+		return false;
+	}
+	_published += size;
+	SANITY_INPUT_BUFFER;
+	return true;
 }
 
 bool IOBuffer::ReadFromFs(File &file, uint32_t size) {
@@ -246,7 +243,7 @@ bool IOBuffer::ReadFromInputBuffer(const IOBuffer &buffer, uint32_t size) {
 
 bool IOBuffer::ReadFromString(string binary) {
 	SANITY_INPUT_BUFFER;
-	if (!ReadFromBuffer((uint8_t *) binary.data(), (uint32_t) binary.length())) {
+	if (!ReadFromBuffer((uint8_t *) binary.c_str(), (uint32_t) binary.length())) {
 		SANITY_INPUT_BUFFER;
 		return false;
 	}
@@ -296,18 +293,17 @@ void IOBuffer::ReadFromRepeat(uint8_t byte, uint32_t size) {
 bool IOBuffer::WriteToTCPFd(int32_t fd, uint32_t size, int32_t &sentAmount) {
 	SANITY_INPUT_BUFFER;
 	bool result = true;
-	if (size == 0)
-		return true;
 	sentAmount = send(fd, (char *) (_pBuffer + _consumed),
 			//_published - _consumed,
 			size > _published - _consumed ? _published - _consumed : size,
 			MSG_NOSIGNAL);
+	int err = LASTSOCKETERROR;
 
 	if (sentAmount < 0) {
-		int err = LASTSOCKETERROR;
-		if ((err != SOCKERROR_EAGAIN)&&(err != SOCKERROR_EINPROGRESS)) {
-			FATAL("Unable to send %"PRIu32" bytes of data data. Size advertised by network layer was %"PRIu32". Permanent error: %d",
-					_published - _consumed, size, err);
+		if (err != SOCKERROR_SEND_IN_PROGRESS) {
+			FATAL("Unable to send %u bytes of data data. Size advertised by network layer was %u [%d: %s]",
+					_published - _consumed, size, err, strerror(err));
+			FATAL("Permanent error!");
 			result = false;
 		}
 	} else {
@@ -320,20 +316,21 @@ bool IOBuffer::WriteToTCPFd(int32_t fd, uint32_t size, int32_t &sentAmount) {
 	return result;
 }
 
-bool IOBuffer::WriteToStdio(int32_t fd, uint32_t size, int32_t &sentAmount) {
+bool IOBuffer::WriteToStdio(int32_t fd, uint32_t size) {
 	SANITY_INPUT_BUFFER;
 	bool result = true;
-	sentAmount = WRITE_FD(fd, (char *) (_pBuffer + _consumed),
+	int32_t sent = WRITE_FD(fd, (char *) (_pBuffer + _consumed),
 			_published - _consumed);
 	//size > _published - _consumed ? _published - _consumed : size,
-	int err = errno;
+	int err = LASTSOCKETERROR;
 
-	if (sentAmount < 0) {
-		FATAL("Unable to send %"PRIu32" bytes of data data. Size advertised by network layer was %"PRIu32". Permanent error: (%d) %s",
+	if (sent < 0) {
+		FATAL("Unable to send %u bytes of data data. Size advertised by network layer was %u [%d: %s]",
 				_published - _consumed, size, err, strerror(err));
+		FATAL("Permanent error!");
 		result = false;
 	} else {
-		_consumed += sentAmount;
+		_consumed += sent;
 	}
 	if (result)
 		Recycle();
@@ -343,11 +340,13 @@ bool IOBuffer::WriteToStdio(int32_t fd, uint32_t size, int32_t &sentAmount) {
 }
 
 uint32_t IOBuffer::GetMinChunkSize() {
+
 	return _minChunkSize;
 }
 
 void IOBuffer::SetMinChunkSize(uint32_t minChunkSize) {
-	o_assert(minChunkSize > 0 && minChunkSize < 16 * 1024 * 1024);
+
+	assert(minChunkSize > 0 && minChunkSize < 16 * 1024 * 1024);
 	_minChunkSize = minChunkSize;
 }
 
@@ -435,19 +434,10 @@ bool IOBuffer::EnsureSize(uint32_t expected) {
 	return true;
 }
 
-string IOBuffer::DumpBuffer(const uint8_t *pBuffer, uint32_t length) {
+string IOBuffer::DumpBuffer(uint8_t *pBuffer, uint32_t length) {
 	IOBuffer temp;
 	temp.ReadFromBuffer(pBuffer, length);
 	return temp.ToString();
-}
-
-string IOBuffer::DumpBuffer(MSGHDR &message, uint32_t limit) {
-	IOBuffer temp;
-	for (MSGHDR_MSG_IOVLEN_TYPE i = 0; i < message.MSGHDR_MSG_IOVLEN; i++) {
-		temp.ReadFromBuffer((uint8_t *) message.MSGHDR_MSG_IOV[i].IOVEC_IOV_BASE,
-				message.MSGHDR_MSG_IOV[i].IOVEC_IOV_LEN);
-	}
-	return temp.ToString(0, limit);
 }
 
 string IOBuffer::ToString(uint32_t startIndex, uint32_t limit) {
@@ -508,6 +498,7 @@ IOBuffer::operator string() {
 
 void IOBuffer::Cleanup() {
 	if (_pBuffer != NULL) {
+
 		delete[] _pBuffer;
 		_pBuffer = NULL;
 	}

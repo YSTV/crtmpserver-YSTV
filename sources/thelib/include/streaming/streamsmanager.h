@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -24,7 +24,6 @@
 #include "common.h"
 
 class BaseStream;
-class BaseInStream;
 class BaseOutStream;
 class BaseClientApplication;
 
@@ -83,7 +82,7 @@ public:
 		@param inboundStreamType
 	 */
 	map<uint32_t, BaseOutStream *> GetWaitingSubscribers(string streamName,
-			uint64_t inboundStreamType, bool closeIncompatibleStreams);
+			uint64_t inboundStreamType);
 
 	/*!
 		@brief Find streams by name
@@ -150,11 +149,6 @@ public:
 		@param uniqueId
 	 */
 	BaseStream * FindByUniqueId(uint32_t uniqueId);
-
-	/*
-	 * Called when streams are about to be unlinked.
-	 */
-	void SignalUnLinkingStreams(BaseInStream *pInStream, BaseOutStream *pOutStream);
 };
 
 #endif	/* _STREAMSMANAGER_H */

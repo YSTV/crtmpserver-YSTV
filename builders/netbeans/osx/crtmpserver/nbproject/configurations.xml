@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<configurationDescriptor version="88">
+<configurationDescriptor version="79">
   <logicalFolder name="root" displayName="root" projectFiles="true" kind="ROOT">
-    <logicalFolder name="include" displayName="include" projectFiles="true">
+    <logicalFolder name="HeaderFiles"
+                   displayName="Header Files"
+                   projectFiles="true">
     </logicalFolder>
-    <logicalFolder name="src" displayName="src" projectFiles="true">
+    <logicalFolder name="SourceFiles"
+                   displayName="Source Files"
+                   projectFiles="true">
       <itemPath>../../../../sources/crtmpserver/src/crtmpserver.cpp</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
@@ -12,15 +16,6 @@
       <itemPath>Makefile.nb</itemPath>
     </logicalFolder>
   </logicalFolder>
-  <sourceRootList>
-    <Elem>../../../../sources/crtmpserver/include</Elem>
-    <Elem>../../../../sources/crtmpserver/src</Elem>
-    <Elem>../../../cmake</Elem>
-    <Elem>../../../../appscaffold</Elem>
-    <Elem>../../../../docs</Elem>
-    <Elem>../../../../constants</Elem>
-    <Elem>../../../make</Elem>
-  </sourceRootList>
   <projectmakefile>Makefile.nb</projectmakefile>
   <confs>
     <conf name="Debug" type="1">
@@ -34,15 +29,10 @@
             <pElem>/opt/local/include</pElem>
             <pElem>../../../../sources/common/include</pElem>
             <pElem>../../../../sources/thelib/include</pElem>
-            <pElem>../../../../sources/crtmpserver/include</pElem>
           </incDir>
           <preprocessorList>
-            <Elem>COMPILE_STATIC</Elem>
-            <Elem>HAS_APP_AGX</Elem>
-            <Elem>HAS_APP_HTTPTESTS</Elem>
-            <Elem>HAS_APP_VBRICK</Elem>
-            <Elem>NET_KQUEUE</Elem>
             <Elem>OSX</Elem>
+            <Elem>NET_KQUEUE</Elem>
           </preprocessorList>
         </ccTool>
         <linkerTool>
@@ -76,11 +66,6 @@
           <commandLine>-L/opt/local/lib -llua</commandLine>
         </linkerTool>
       </compileType>
-      <item path="../../../../sources/crtmpserver/src/crtmpserver.cpp"
-            ex="false"
-            tool="1"
-            flavor2="0">
-      </item>
     </conf>
     <conf name="Release" type="1">
       <toolsSet>
@@ -99,8 +84,8 @@
             <pElem>../../../../sources/thelib/include</pElem>
           </incDir>
           <preprocessorList>
-            <Elem>NET_KQUEUE</Elem>
             <Elem>OSX</Elem>
+            <Elem>NET_KQUEUE</Elem>
           </preprocessorList>
         </ccTool>
         <fortranCompilerTool>
@@ -137,11 +122,6 @@
           <commandLine>-L/opt/local/lib -llua</commandLine>
         </linkerTool>
       </compileType>
-      <item path="../../../../sources/crtmpserver/src/crtmpserver.cpp"
-            ex="false"
-            tool="1"
-            flavor2="0">
-      </item>
     </conf>
   </confs>
 </configurationDescriptor>

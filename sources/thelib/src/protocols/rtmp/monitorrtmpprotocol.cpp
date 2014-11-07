@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -281,12 +281,12 @@ bool MonitorRTMPProtocol::ProcessBytes(IOBuffer &buffer) {
 								FATAL("Invalid channel id in reset message: %"PRIu32, channelId);
 								return false;
 							}
-							o_assert(_channels[channelId].id == channelId);
+							assert(_channels[channelId].id == channelId);
 							_channels[channelId].Reset();
 						}
 
 						if (GETAVAILABLEBYTESCOUNT(channel.inputData) != 0) {
-							FATAL("Invalid message! We have leftovers: %u bytes",
+							FATAL("Invalid message!!! We have leftovers: %u bytes",
 									GETAVAILABLEBYTESCOUNT(channel.inputData));
 							return false;
 						}

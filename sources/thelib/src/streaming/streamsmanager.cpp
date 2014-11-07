@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -63,9 +63,8 @@ void StreamsManager::UnRegisterStream(BaseStream *pStream) {
 		MAP_ERASE2(_streamsByProtocolId, pStream->GetProtocol()->GetId(), pStream->GetUniqueId());
 	MAP_ERASE2(_streamsByType, pStream->GetType(), pStream->GetUniqueId());
 	MAP_ERASE2(_streamsByName, pStream->GetName(), pStream->GetUniqueId());
-	if (signalStreamUnregistered) {
+	if (signalStreamUnregistered)
 		_pApplication->SignalStreamUnRegistered(pStream);
-	}
 }
 
 void StreamsManager::UnRegisterStreams(uint32_t protocolId) {
@@ -86,8 +85,7 @@ map<uint32_t, BaseStream *> StreamsManager::GetAllStreams() {
 	return _streamsByUniqueId;
 }
 
-map<uint32_t, BaseOutStream *> StreamsManager::GetWaitingSubscribers(
-		string streamName, uint64_t inboundStreamType, bool closeIncompatibleStreams) {
+map<uint32_t, BaseOutStream *> StreamsManager::GetWaitingSubscribers(string streamName, uint64_t inboundStreamType) {
 	//1. Validate the inbound stream type
 	if (!TAG_KIND_OF(inboundStreamType, ST_IN))
 		return map<uint32_t, BaseOutStream *>();
@@ -113,22 +111,16 @@ map<uint32_t, BaseOutStream *> StreamsManager::GetWaitingSubscribers(
 	FOR_MAP(shortSubscribers, uint32_t, BaseStream *, i) {
 		if (((BaseOutStream *) MAP_VAL(i))->IsLinked())
 			continue;
-		if (!((BaseOutStream *) MAP_VAL(i))->IsCompatibleWithType(inboundStreamType)) {
-			if (closeIncompatibleStreams)
-				((BaseOutStream *) MAP_VAL(i))->EnqueueForDelete();
+		if (!((BaseOutStream *) MAP_VAL(i))->IsCompatibleWithType(inboundStreamType))
 			continue;
-		}
 		result[MAP_KEY(i)] = (BaseOutStream *) MAP_VAL(i);
 	}
 
 	FOR_MAP(longSubscribers, uint32_t, BaseStream *, i) {
 		if (((BaseOutStream *) MAP_VAL(i))->IsLinked())
 			continue;
-		if (!((BaseOutStream *) MAP_VAL(i))->IsCompatibleWithType(inboundStreamType)) {
-			if (closeIncompatibleStreams)
-				((BaseOutStream *) MAP_VAL(i))->EnqueueForDelete();
+		if (!((BaseOutStream *) MAP_VAL(i))->IsCompatibleWithType(inboundStreamType))
 			continue;
-		}
 		result[MAP_KEY(i)] = (BaseOutStream *) MAP_VAL(i);
 	}
 
@@ -289,7 +281,3 @@ BaseStream * StreamsManager::FindByUniqueId(uint32_t uniqueId) {
 	return NULL;
 }
 
-void StreamsManager::SignalUnLinkingStreams(BaseInStream *pInStream,
-		BaseOutStream *pOutStream) {
-	_pApplication->SignalUnLinkingStreams(pInStream, pOutStream);
-}

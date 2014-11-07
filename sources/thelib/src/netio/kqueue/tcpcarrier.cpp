@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -56,7 +56,6 @@ TCPCarrier::TCPCarrier(int32_t fd)
 	GetEndpointsInfo();
 	_rx = 0;
 	_tx = 0;
-	_ioAmount = 0;
 }
 
 TCPCarrier::~TCPCarrier() {
@@ -64,38 +63,37 @@ TCPCarrier::~TCPCarrier() {
 }
 
 bool TCPCarrier::OnEvent(struct kevent &event) {
+	int32_t readAmount = 0;
+	int32_t writeAmount = 0;
+
 	//3. Do the I/O
 	switch (event.filter) {
 		case EVFILT_READ:
 		{
 			IOBuffer *pInputBuffer = _pProtocol->GetInputBuffer();
-			o_assert(pInputBuffer != NULL);
-			if (!pInputBuffer->ReadFromTCPFd(event.ident, event.data, _ioAmount)) {
-				FATAL("Unable to read data. %s:%"PRIu16" -> %s:%"PRIu16" %s",
+			assert(pInputBuffer != NULL);
+			if (!pInputBuffer->ReadFromTCPFd(event.ident, event.data, readAmount)) {
+				FATAL("Unable to read data. %s:%hu -> %s:%hu",
 						STR(_farIp), _farPort,
-						STR(_nearIp), _nearPort,
-						(_pProtocol != NULL) ? STR(*_pProtocol) : ""
-						);
+						STR(_nearIp), _nearPort);
 				return false;
 			}
-			_rx += _ioAmount;
-			ADD_IN_BYTES_MANAGED(_type, _ioAmount);
-			return _pProtocol->SignalInputData(_ioAmount);
+			_rx += readAmount;
+			return _pProtocol->SignalInputData(readAmount);
 		}
 		case EVFILT_WRITE:
 		{
 			IOBuffer *pOutputBuffer = NULL;
 
 			if ((pOutputBuffer = _pProtocol->GetOutputBuffer()) != NULL) {
-				if (!pOutputBuffer->WriteToTCPFd(event.ident, event.data, _ioAmount)) {
+				if (!pOutputBuffer->WriteToTCPFd(event.ident, event.data, writeAmount)) {
 					FATAL("Unable to send data. %s:%hu -> %s:%hu",
 							STR(_farIp), _farPort,
 							STR(_nearIp), _nearPort);
 					IOHandlerManager::EnqueueForDelete(this);
 					return false;
 				}
-				_tx += _ioAmount;
-				ADD_OUT_BYTES_MANAGED(_type, _ioAmount);
+				_tx += writeAmount;
 				if (GETAVAILABLEBYTESCOUNT(*pOutputBuffer) == 0) {
 					DISABLE_WRITE_DATA;
 				}
@@ -179,12 +177,6 @@ uint16_t TCPCarrier::GetNearEndpointPort() {
 }
 
 bool TCPCarrier::GetEndpointsInfo() {
-	if ((_farIp != "")
-			&& (_farPort != 0)
-			&& (_nearIp != "")
-			&& (_nearPort != 0)) {
-		return true;
-	}
 	socklen_t len = sizeof (sockaddr);
 	if (getpeername(_inboundFd, (sockaddr *) & _farAddress, &len) != 0) {
 		FATAL("Unable to get peer's address");

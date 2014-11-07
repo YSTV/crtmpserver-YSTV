@@ -36,8 +36,6 @@ class InboundConnectivity;
 class BaseOutStream;
 struct RTPClient;
 
-//#define RTSP_DUMP_TRAFFIC
-
 class DLLEXP RTSPProtocol
 : public BaseProtocol {
 private:
@@ -51,10 +49,6 @@ private:
 		virtual ~RTSPKeepAliveTimer();
 		virtual bool TimePeriodElapsed();
 	};
-#ifdef RTSP_DUMP_TRAFFIC
-	string _debugInputData;
-	string _debugOutputData;
-#endif /* RTSP_DUMP_TRAFFIC */
 protected:
 	uint32_t _state;
 	bool _rtpData;
@@ -85,15 +79,8 @@ protected:
 	BaseOutStream *_pOutStream;
 
 	string _keepAliveURI;
-	string _keepAliveMethod;
 
 	string _sessionId;
-	bool _enableTearDown;
-
-	IOBuffer _internalBuffer;
-	uint32_t _maxBufferSize;
-
-	uint32_t _clientSideBuffer;
 public:
 	RTSPProtocol();
 	virtual ~RTSPProtocol();
@@ -104,10 +91,8 @@ public:
 	virtual bool AllowFarProtocol(uint64_t type);
 	virtual bool AllowNearProtocol(uint64_t type);
 	virtual bool SignalInputData(int32_t recvAmount);
-	bool FeedRTSPRequest(string &data);
 	virtual bool SignalInputData(IOBuffer &buffer);
 	virtual void GetStats(Variant &info, uint32_t namespaceId = 0);
-	virtual void EnqueueForDelete();
 
 	string GetSessionId();
 	string GenerateSessionId();
@@ -116,9 +101,7 @@ public:
 	bool SetAuthentication(string wwwAuthenticateHeader, string userName,
 			string password);
 	bool EnableKeepAlive(uint32_t period, string keepAliveURI);
-	void EnableTearDown();
-	void SetKeepAliveMethod(string keepAliveMethod);
-	bool SendKeepAlive();
+	bool SendKeepAliveOptions();
 	bool HasConnectivity();
 
 	SDP &GetInboundSDP();
@@ -149,9 +132,9 @@ public:
 
 	void CloseInboundConnectivity();
 
-	bool SendRaw(uint8_t *pBuffer, uint32_t length, bool allowDrop);
+	bool SendRaw(uint8_t *pBuffer, uint32_t length);
 	bool SendRaw(MSGHDR *pMessage, uint16_t length, RTPClient *pClient,
-			bool isAudio, bool isData, bool allowDrop);
+			bool isAudio, bool isData);
 
 	void SetOutStream(BaseOutStream *pOutStream);
 private:

@@ -21,9 +21,6 @@
 #ifndef _MAX_H
 #define _MAX_H
 
-#include <stdint.h>
-
-/*
 #ifdef UINT64_MAX
 #undef UINT64_MAX
 #endif
@@ -105,7 +102,6 @@
 #ifndef INT8_MIN
 #define INT8_MIN   ((int8_t)(0x80))
 #endif
- */
 
 #endif /* _MAX_H */
 #endif /* WIN32 */

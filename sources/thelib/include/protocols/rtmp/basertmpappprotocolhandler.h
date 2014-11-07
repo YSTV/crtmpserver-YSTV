@@ -1,4 +1,4 @@
-/*
+/* 
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -26,11 +26,12 @@
 #include "protocols/rtmp/header.h"
 #include "protocols/rtmp/rtmpprotocolserializer.h"
 #include "protocols/rtmp/sharedobjects/somanager.h"
-#include "mediaformats/readers/streammetadataresolver.h"
+#include "streaming/baseoutstream.h"
+#include "streaming/baseoutfilestream.h"
 
 class OutboundRTMPProtocol;
 class BaseRTMPProtocol;
-class ClientSO;
+class BaseOutFileStream;
 
 class DLLEXP BaseRTMPAppProtocolHandler
 : public BaseAppProtocolHandler {
@@ -38,12 +39,18 @@ protected:
 	RTMPProtocolSerializer _rtmpProtocolSerializer;
 	SOManager _soManager;
 	bool _validateHandshake;
+	bool _renameBadFiles;
+	string _mediaFolder;
+	bool _externSeekGenerator;
 	bool _enableCheckBandwidth;
 	Variant _onBWCheckMessage;
 	Variant _onBWCheckStrippedMessage;
 	map<uint32_t, BaseRTMPProtocol *> _connections;
 	map<uint32_t, uint32_t> _nextInvokeId;
 	map<uint32_t, map<uint32_t, Variant > > _resultMessageTracking;
+	bool _keyframeSeek;
+	int32_t _clientSideBuffer;
+	uint32_t _seekGranularity;
 	Variant _adobeAuthSettings;
 	string _authMethod;
 	string _adobeAuthSalt;
@@ -64,13 +71,6 @@ public:
 	 * This will return the shared objects manager for this particular application
 	 * */
 	SOManager *GetSOManager();
-	virtual void SignalClientSOConnected(BaseRTMPProtocol *pFrom, ClientSO *pClientSO);
-	virtual void SignalClientSOUpdated(BaseRTMPProtocol *pFrom, ClientSO *pClientSO);
-	virtual void SignalClientSOSend(BaseRTMPProtocol *pFrom, ClientSO *pClientSO,
-			Variant &parameters);
-
-	virtual void SignalOutBufferFull(BaseRTMPProtocol *pFrom,
-			uint32_t outstanding, uint32_t maxValue);
 
 	/*
 	 * (Un)Register connection. This is called by the framework
@@ -85,16 +85,12 @@ public:
 	 * Basically, this will open a RTMP client and start playback a stream
 	 * */
 	virtual bool PullExternalStream(URI uri, Variant streamConfig);
-	virtual bool PullExternalStream(URI &uri, BaseRTMPProtocol *pFrom,
-			string &sourceName, string &destName);
 
 	/*
 	 * This is called by the framework when a stream needs to be pushed forward
 	 * Basically, this will open a RTMP client and start publishing a stream
 	 * */
 	virtual bool PushLocalStream(Variant streamConfig);
-	virtual bool PushLocalStream(BaseRTMPProtocol *pFrom, string sourceName,
-			string destName);
 
 	/*
 	 * This is called bt the framework when an outbound connection was established
@@ -126,6 +122,11 @@ public:
 	 * */
 	virtual bool InboundMessageAvailable(BaseRTMPProtocol *pFrom, Variant &request);
 
+	/*
+	 * This will generate all the meta and seek files inside the mediaFolder
+	 * */
+	void GenerateMetaFiles();
+
 	//TODO: Commenting ou the protected section bellow is a quite nasty hack
 	//It is done to support virtual machines and out-of-hierarchy calls
 	//for the base class. This should be definitely removed and re-factored
@@ -149,7 +150,6 @@ public:
 	virtual bool ProcessSharedObject(BaseRTMPProtocol *pFrom, Variant &request);
 	virtual bool ProcessInvoke(BaseRTMPProtocol *pFrom, Variant &request);
 	virtual bool ProcessInvokeConnect(BaseRTMPProtocol *pFrom, Variant &request);
-	virtual bool ProcessInvokeClose(BaseRTMPProtocol *pFrom, Variant &request);
 	virtual bool ProcessInvokeCreateStream(BaseRTMPProtocol *pFrom,
 			Variant &request);
 	virtual bool ProcessInvokePublish(BaseRTMPProtocol *pFrom,
@@ -172,15 +172,9 @@ public:
 			Variant &request);
 	virtual bool ProcessInvokeFCPublish(BaseRTMPProtocol *pFrom,
 			Variant &request);
-	virtual bool ProcessInvokeFCSubscribe(BaseRTMPProtocol *pFrom,
-			Variant &request);
 	virtual bool ProcessInvokeGetStreamLength(BaseRTMPProtocol *pFrom,
 			Variant &request);
 	virtual bool ProcessInvokeOnBWDone(BaseRTMPProtocol *pFrom,
-			Variant &request);
-	virtual bool ProcessInvokeOnFCPublish(BaseRTMPProtocol *pFrom,
-			Variant &request);
-	virtual bool ProcessInvokeOnFCUnpublish(BaseRTMPProtocol *pFrom,
 			Variant &request);
 	virtual bool ProcessInvokeCheckBandwidth(BaseRTMPProtocol *pFrom,
 			Variant &request);
@@ -200,10 +194,6 @@ public:
 	virtual bool ProcessInvokeResult(BaseRTMPProtocol *pFrom,
 			Variant &request, Variant &response);
 	virtual bool ProcessInvokeConnectResult(BaseRTMPProtocol *pFrom,
-			Variant &request, Variant &response);
-	virtual bool ProcessInvokeReleaseStreamResult(BaseRTMPProtocol *pFrom,
-			Variant &request, Variant &response);
-	virtual bool ProcessInvokeFCPublishStreamResult(BaseRTMPProtocol *pFrom,
 			Variant &request, Variant &response);
 	virtual bool ProcessInvokeCreateStreamResult(BaseRTMPProtocol *pFrom,
 			Variant &request, Variant &response);
@@ -226,6 +216,16 @@ public:
 	virtual string GetAuthPassword(string user);
 
 	/*
+	 * This will try to extract complete metadata for the specified stream name
+	 * streamName - the name of the stream for which the metadata is desired.
+	 *              the stream name has special formats.
+	 *              see http://rtmpd.com/browser/trunk/media/README.txt
+	 * extractInnerMetadata - will try to read the metadata from the file
+	 *                        if applicable
+	 * */
+	Variant GetMetaData(string streamName, bool extractInnerMetadata);
+
+	/*
 	 * Used to send generi RTMP messages
 	 * pTo - target connection
 	 * message - complete RTMP message
@@ -237,31 +237,13 @@ public:
 			bool trackResponse = false);
 
 	/*
-	 * Opens a client-side connection for a shared object
+	 * Create a file stream for writing to disk.
+	 * pFrom - The connection which wants to stream to disk
+	 * meta - Stream metadata
+	 * append - Whether to append this stream to an exiting file
 	 * */
-	bool OpenClientSharedObject(BaseRTMPProtocol *pFrom, string soName);
-
-	/*!
-	 * Called by the framework when the RTMP connection is a dissector.
-	 * Should be ONLY re-implemented in dissectors
-	 */
-	virtual bool FeedAVData(BaseRTMPProtocol *pFrom, uint8_t *pData,
-			uint32_t dataLength, uint32_t processedLength, uint32_t totalLength,
-			double pts, double dts, bool isAudio);
-
-	/*!
-	 * Called by the framework when the RTMP connection is a dissector.
-	 * Should be ONLY re-implemented in dissectors
-	 */
-	virtual bool FeedAVDataAggregate(BaseRTMPProtocol *pFrom, uint8_t *pData,
-			uint32_t dataLength, uint32_t processedLength, uint32_t totalLength,
-			double pts, double dts, bool isAudio);
+	virtual BaseOutFileStream *CreateOutFileStream(BaseRTMPProtocol *pFrom, Variant &meta, bool append);
 private:
-	/*
-	 * Will clear any leftovers from failed authentication attempts
-	 */
-	void ClearAuthenticationInfo(BaseProtocol *pFrom);
-
 	/*
 	 * Will transform stream names of type streamName?param1=value1&param2=value2&...
 	 * into streamName-param1_value1-param2_value2...
@@ -277,7 +259,7 @@ private:
 	 * returns true if process returned successfully, or false otherwise
 	 * */
 	bool TryLinkToLiveStream(BaseRTMPProtocol *pFrom, uint32_t streamId,
-			string streamName, bool &linked, string &aliasName);
+			string streamName, bool &linked);
 
 	/*
 	 * Tries to create an outbound stream and link it to the file inbound stream
@@ -287,8 +269,8 @@ private:
 	 * returns true if process returned successfully, or false otherwise
 	 * */
 	bool TryLinkToFileStream(BaseRTMPProtocol *pFrom, uint32_t streamId,
-			Metadata &metadata, string streamName, double startTime,
-			double length, bool &linked, string &aliasName);
+			Variant &metadata, string streamName, double startTime,
+			double length, bool &linked);
 
 	/*
 	 * This will return true if the connection is an outbound connection

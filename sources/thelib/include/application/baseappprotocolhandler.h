@@ -24,7 +24,6 @@
 #include "common.h"
 
 class BaseClientApplication;
-class StreamMetadataResolver;
 class BaseProtocol;
 class BaseInStream;
 
@@ -78,12 +77,6 @@ public:
 		@brief
 	 */
 	virtual void UnRegisterProtocol(BaseProtocol *pProtocol) = 0;
-
-
-	/*!
-	 * @brief returns the stream metadata resolver associated with this application
-	 */
-	StreamMetadataResolver *GetStreamMetadataResolver();
 };
 
 #endif	/* _BASEAPPPROTOCOLHANDLER_H */

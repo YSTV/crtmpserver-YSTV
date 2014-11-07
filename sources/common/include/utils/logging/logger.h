@@ -1,4 +1,4 @@
-/* 
+/*
  *  Copyright (c) 2010,
  *  Gavriloaie Eugen-Andrei (shiretu@gmail.com)
  *
@@ -28,6 +28,23 @@
 
 class BaseLogLocation;
 
+class DLLEXP Version {
+public:
+	static string GetBuildNumber();
+	static uint64_t GetBuildDate();
+	static string GetBuildDateString();
+	static string GetReleaseNumber();
+	static string GetCodeName();
+	static string GetBuilderOSName();
+	static string GetBuilderOSVersion();
+	static string GetBuilderOSArch();
+	static string GetBuilderOSUname();
+	static string GetBuilderOS();
+	static string GetBanner();
+	static Variant GetAll();
+	static Variant GetBuilder();
+};
+
 class DLLEXP Logger {
 private:
 	static Logger *_pLogger; //! Pointer to the Logger class.
@@ -49,8 +66,8 @@ public:
 			string functionName, Variant &le);
 	static bool AddLogLocation(BaseLogLocation *pLogLocation);
 	static void SignalFork();
+	static void SetLevel(int32_t level);
 };
-
 
 #endif /* _LOGGER_H */
 

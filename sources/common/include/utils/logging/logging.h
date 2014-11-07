@@ -27,7 +27,7 @@
 #include "utils/logging/fileloglocation.h"
 #include "utils/logging/logcatloglocation.h"
 #include "utils/logging/syslogloglocation.h"
-#include "utils/logging/logeventfactory.h"
+
 #include "utils/logging/logger.h"
 
 
@@ -42,8 +42,38 @@ do { \
 #define __VALIDATE_FROMAT_SPECIFIERS(...)
 #endif /* VALIDATE_FROMAT_SPECIFIERS */
 
-#define LOG(level,...) do{__VALIDATE_FROMAT_SPECIFIERS(__VA_ARGS__);Logger::Log(level, __FILE__, __LINE__, __func__, __VA_ARGS__);}while(0)
-#define FATAL(...) do{__VALIDATE_FROMAT_SPECIFIERS(__VA_ARGS__);Logger::Log(_FATAL_, __FILE__, __LINE__, __func__, __VA_ARGS__);}while(0)
+#ifdef FILE_OVERRIDE
+#define __FILE__OVERRIDE ""
+#else
+#define __FILE__OVERRIDE __FILE__
+#endif
+
+#ifdef LINE_OVERRIDE
+#define __LINE__OVERRIDE 0
+#else
+#define __LINE__OVERRIDE __LINE__
+#endif
+
+#ifdef FUNC_OVERRIDE
+#define __FUNC__OVERRIDE ""
+#else
+#define __FUNC__OVERRIDE __func__
+#endif
+
+#ifdef FILE_OVERRIDE
+#define __FILE__OVERRIDE ""
+#define E__FILE__ __FILE__OVERRIDE
+#else /* FILE_OVERRIDE */
+#define __FILE__OVERRIDE __FILE__
+#ifdef SHORT_PATH_IN_LOGGER
+#define E__FILE__ ((const char *)__FILE__OVERRIDE)+SHORT_PATH_IN_LOGGER
+#else /* SHORT_PATH_IN_LOGGER */
+#define E__FILE__ __FILE__OVERRIDE
+#endif /* SHORT_PATH_IN_LOGGER */
+#endif /* FILE_OVERRIDE */
+
+#define LOG(level,...) do{__VALIDATE_FROMAT_SPECIFIERS(__VA_ARGS__);Logger::Log(level, E__FILE__, __LINE__OVERRIDE, __FUNC__OVERRIDE, __VA_ARGS__);}while(0)
+#define FATAL(...) do{__VALIDATE_FROMAT_SPECIFIERS(__VA_ARGS__);Logger::Log(_FATAL_, E__FILE__, __LINE__OVERRIDE, __FUNC__OVERRIDE, __VA_ARGS__);}while(0)
 
 #define WARN(...) do{__VALIDATE_FROMAT_SPECIFIERS(__VA_ARGS__);Logger::Log(_WARNING_, __FILE__, __LINE__, __func__, __VA_ARGS__);}while(0)
 #define INFO(...) do{__VALIDATE_FROMAT_SPECIFIERS(__VA_ARGS__);Logger::Log(_INFO_, __FILE__, __LINE__, __func__, __VA_ARGS__);}while(0)
